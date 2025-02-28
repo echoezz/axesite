@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "healthup"
+rootProject.name = "axesite"
 include(":app")
  

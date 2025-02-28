@@ -1,4 +1,4 @@
-package com.example.healthup.ui.theme
+package com.example.axesite.ui.theme
 
 import android.app.Activity
 import android.os.Build

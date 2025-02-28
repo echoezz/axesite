@@ -1,4 +1,4 @@
-package com.example.healthup.ui.theme
+package com.example.axesite.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
