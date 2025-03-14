@@ -60,7 +60,7 @@ fun SignInScreen(navController: NavController) {
                                     val storedPassword = userSnapshot.child("password").getValue(String::class.java)
                                     if (storedPassword == password) {
                                         // Correct credentials – navigate to home screen
-                                        navController.navigate("home")
+                                        navController.navigate("forum")
                                     } else {
                                         // Password mismatch – inform the user
                                     }
@@ -86,4 +86,3 @@ fun SignInScreen(navController: NavController) {
         }
     }
 }
-
