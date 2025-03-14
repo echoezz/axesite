@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import com.example.axesite.screens.SignInScreen
 import com.example.axesite.screens.SignUpScreen
 import com.example.axesite.screens.HomeScreen
+import com.example.axesite.screens.ProfileScreen
 
 @Composable
 fun AuthNavGraph(navController: NavHostController) {
@@ -14,5 +15,6 @@ fun AuthNavGraph(navController: NavHostController) {
         composable("signin") { SignInScreen(navController) }
         composable("signup") { SignUpScreen(navController) }
         composable("home") { HomeScreen() }
+        composable("profile") { ProfileScreen(navController) }
     }
 }
