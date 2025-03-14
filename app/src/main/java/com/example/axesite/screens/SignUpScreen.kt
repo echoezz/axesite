@@ -1,14 +1,19 @@
 package com.example.axesite.screens
 
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.database.*
+import com.example.axesite.util.hashPassword
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -16,11 +21,10 @@ fun SignUpScreen(navController: NavController) {
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    // Role is hard-coded for now. You can expand this to a selectable option.
-    val role = "user"
-
-    // This state will display error messages, if any.
     var errorMessage by remember { mutableStateOf("") }
+    // Role selection state; default is "student"
+    var selectedRole by remember { mutableStateOf("student") }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Sign Up") }) }
@@ -54,44 +58,63 @@ fun SignUpScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(16.dp))
+            Text("Select Role")
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(
+                    selected = selectedRole == "teacher",
+                    onClick = { selectedRole = "teacher" }
+                )
+                Text("Teacher")
+                Spacer(modifier = Modifier.width(16.dp))
+                RadioButton(
+                    selected = selectedRole == "student",
+                    onClick = { selectedRole = "student" }
+                )
+                Text("Student")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = {
-                    // Clear previous error (if any)
                     errorMessage = ""
-
-                    // Instantiate Firebase connection with your URL
-                    val database = FirebaseDatabase.getInstance(
-                        "https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/"
-                    )
-                    // Use the "accounts" node (or "users"—choose one consistently)
+                    val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
                     val registryRef = database.getReference("users")
-                    // Generate a unique user ID. (Alternatively, you might use a sanitized email.)
+                    // Generate a unique user ID
                     val userID = registryRef.push().key ?: run {
                         errorMessage = "Error generating user ID."
                         return@Button
                     }
-
-                    // Check if the user ID already exists
+                    // Check if the generated userID already exists (unlikely with push keys)
                     registryRef.child(userID).addListenerForSingleValueEvent(object : ValueEventListener {
                         override fun onDataChange(snapshot: DataSnapshot) {
                             if (snapshot.exists()) {
-                                // Unlikely to happen with push() keys
                                 errorMessage = "User ID already exists."
                             } else {
-                                // Prepare the user map (hash the password in a real app)
                                 val userMap = mapOf(
                                     "id" to userID,
                                     "name" to fullName,
                                     "email" to email,
                                     "password" to hashPassword(password),
-                                    "role" to role
+                                    "role" to selectedRole
                                 )
-                                // Store user data in the database
                                 registryRef.child(userID).setValue(userMap)
                                     .addOnCompleteListener { task ->
                                         if (task.isSuccessful) {
-                                            // Registration succeeded; navigate to home
-                                            navController.navigate("home")
+                                            // Save session data in SharedPreferences
+                                            val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
+                                            sharedPreferences.edit().apply {
+                                                putString("userId", userID)
+                                                putString("role", selectedRole)
+                                                putBoolean("isLoggedIn", true)
+                                                apply()
+                                            }
+                                            // Navigate based on the selected role
+                                            if (selectedRole == "teacher") {
+                                                navController.navigate("home")
+                                            } else {
+                                                navController.navigate("home")
+                                            }
                                         } else {
                                             errorMessage = "Registration Failed: ${task.exception?.message}"
                                         }
@@ -118,11 +141,4 @@ fun SignUpScreen(navController: NavController) {
             }
         }
     }
-}
-
-// Dummy hash function—replace with proper hashing in a production app.
-fun hashPassword(password: String): String {
-    // For demonstration, this returns the original password.
-    // In a real app, hash the password securely.
-    return password
 }
