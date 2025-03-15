@@ -76,7 +76,7 @@ fun SignInScreen(navController: NavController) {
                                         }
                                         // Navigate based on user role
                                         if (userRole == "teacher") {
-                                            navController.navigate("forum")
+                                            navController.navigate("enroll")
                                         } else {
                                             navController.navigate("forum")
                                         }
