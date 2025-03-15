@@ -10,6 +10,8 @@ import com.example.axesite.screens.SignUpScreen
 import com.example.axesite.screens.HomeScreen
 import com.example.axesite.screens.ProfileScreen
 import com.example.axesite.screens.EnrollmentScreen
+import com.example.axesite.screens.StudentGroupJoinScreen
+import com.example.axesite.screens.TeacherGroupManagementScreen
 import com.example.axesite.screens.ThreadDetailScreen
 
 @Composable
@@ -25,5 +27,8 @@ fun AuthNavGraph(navController: NavHostController) {
         composable("profile") { ProfileScreen(navController) }
         composable("forum") { ForumsScreen(navController) } // edited here
         composable("enroll") { EnrollmentScreen(navController)}
+        composable("teacher_group") { TeacherGroupManagementScreen(navController) }
+        composable("student_group") { StudentGroupJoinScreen(navController) }
+
     }
 }
