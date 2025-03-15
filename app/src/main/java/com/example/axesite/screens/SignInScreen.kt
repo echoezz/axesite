@@ -70,6 +70,7 @@ fun SignInScreen(navController: NavController) {
                                         sharedPreferences.edit().apply {
                                             putString("userId", userSnapshot.key)
                                             putString("role", userRole)
+                                            putString("name", userSnapshot.child("name").getValue(String::class.java) ?: "Unknown")
                                             putBoolean("isLoggedIn", true)
                                             apply()
                                         }
@@ -77,7 +78,7 @@ fun SignInScreen(navController: NavController) {
                                         if (userRole == "teacher") {
                                             navController.navigate("home")
                                         } else {
-                                            navController.navigate("home")
+                                            navController.navigate("forum")
                                         }
                                     } else {
                                         errorMessage = "Password incorrect"
