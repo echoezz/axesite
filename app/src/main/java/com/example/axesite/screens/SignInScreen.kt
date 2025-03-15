@@ -1,24 +1,25 @@
 package com.example.axesite.screens
 
+import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-//database related imports
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.*
+import com.example.axesite.util.hashPassword
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignInScreen(navController: NavController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Sign In") }) }
@@ -45,33 +46,51 @@ fun SignInScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(16.dp))
+            if (errorMessage.isNotEmpty()) {
+                Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             Button(
                 onClick = {
                     val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
                     val usersRef = database.getReference("users")
-
                     // Query users by email
                     val query = usersRef.orderByChild("email").equalTo(email)
                     query.addListenerForSingleValueEvent(object : ValueEventListener {
                         override fun onDataChange(snapshot: DataSnapshot) {
                             if (snapshot.exists()) {
-                                // Loop through matching users (should be one if emails are unique)
+                                // Loop through matching users (assuming unique emails)
                                 for (userSnapshot in snapshot.children) {
                                     val storedPassword = userSnapshot.child("password").getValue(String::class.java)
-                                    if (storedPassword == password) {
-                                        // Correct credentials – navigate to home screen
-                                        navController.navigate("forum")
+                                    val userRole = userSnapshot.child("role").getValue(String::class.java) ?: "student"
+                                    // Hash the entered password before comparing
+                                    if (storedPassword == hashPassword(password)) {
+                                        // Save session data in SharedPreferences
+                                        val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
+                                        sharedPreferences.edit().apply {
+                                            putString("userId", userSnapshot.key)
+                                            putString("role", userRole)
+                                            putString("name", userSnapshot.child("name").getValue(String::class.java) ?: "Unknown")
+                                            putBoolean("isLoggedIn", true)
+                                            apply()
+                                        }
+                                        // Navigate based on user role
+                                        if (userRole == "teacher") {
+                                            navController.navigate("enroll")
+                                        } else {
+                                            navController.navigate("forum")
+                                        }
                                     } else {
-                                        // Password mismatch – inform the user
+                                        errorMessage = "Password incorrect"
                                     }
                                 }
                             } else {
-                                // No user found with that email – handle accordingly
+                                errorMessage = "No user found with that email."
                             }
                         }
 
                         override fun onCancelled(error: DatabaseError) {
-                            // Handle error
+                            errorMessage = "Error: ${error.message}"
                         }
                     })
                 },
