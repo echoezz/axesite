@@ -19,7 +19,7 @@ fun AuthNavGraph(navController: NavHostController) {
         composable("home") { HomeScreen() }
         composable("threadDetail/{threadId}") { backStackEntry ->
             val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
-            ThreadDetailScreen(threadId = threadId)
+            ThreadDetailScreen(navController=navController,threadId = threadId)
         }
         composable("profile") { ProfileScreen(navController) }
         composable("forum") { ForumsScreen(navController) } // edited here

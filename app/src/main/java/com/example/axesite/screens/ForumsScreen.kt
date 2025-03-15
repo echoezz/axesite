@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,8 +23,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.io.Serializable
-import androidx.compose.material.icons.filled.Edit
-
 
 /* -----------------------------------------
  * Data Classes
@@ -53,7 +53,7 @@ data class Reply(
 )
 
 /**
- * Convenience wrapper for displaying thread info along with latest reply.
+ * Convenience wrapper for displaying thread info along with the latest reply.
  */
 data class ThreadWithLastReply(
     val thread: ForumThread,
@@ -61,7 +61,7 @@ data class ThreadWithLastReply(
 )
 
 /* -----------------------------------------
- * Firebase Write Functions
+ * Firebase Write/Update/Delete Functions
  * -----------------------------------------
  */
 
@@ -94,6 +94,27 @@ fun addReplyToFirebase(threadId: String, reply: Reply) {
             "replyTime" to reply.replyTime
         )
     )
+}
+
+/**
+ * Updates a thread's title and message in Firebase.
+ */
+fun updateThreadInFirebase(threadId: String, thread: ForumThread) {
+    val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
+    dbRef.updateChildren(
+        mapOf(
+            "title" to thread.title,
+            "msg" to thread.msg
+        )
+    )
+}
+
+/**
+ * Deletes a thread from Firebase.
+ */
+fun deleteThreadFromFirebase(threadId: String) {
+    val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
+    dbRef.removeValue()
 }
 
 /* -----------------------------------------
@@ -155,6 +176,65 @@ fun AddThreadDialog(
 }
 
 /* -----------------------------------------
+ * EditThreadDialog: For editing a thread.
+ * -----------------------------------------
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EditThreadDialog(
+    currentUserName: String,
+    initialTitle: String,
+    initialMsg: String,
+    onDismiss: () -> Unit,
+    onSubmit: (ForumThread) -> Unit
+) {
+    var title by remember { mutableStateOf(initialTitle) }
+    var msg by remember { mutableStateOf(initialMsg) }
+    val currentTime = remember {
+        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Thread") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Title") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = msg,
+                    onValueChange = { msg = it },
+                    label = { Text("Message") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Edited by: $currentUserName")
+                Text("Edited at: $currentTime")
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onSubmit(
+                    ForumThread(
+                        title = title,
+                        msg = msg,
+                        postedBy = currentUserName,
+                        postedTime = currentTime
+                    )
+                )
+            }) { Text("Submit") }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+/* -----------------------------------------
  * AddReplyDialog: For adding a reply to a thread.
  * -----------------------------------------
  */
@@ -169,7 +249,6 @@ fun AddReplyDialog(
     val currentTime = remember {
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
     }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Reply") },
@@ -233,25 +312,20 @@ fun ForumsScreen(navController: NavHostController) {
                     val msg = forumSnapshot.child("msg").getValue(String::class.java) ?: ""
                     val postedBy = forumSnapshot.child("postedBy").getValue(String::class.java) ?: ""
                     val postedTime = forumSnapshot.child("postedTime").getValue(String::class.java) ?: ""
-
                     // Replies
                     val repliesSnapshot = forumSnapshot.child("replies")
                     val replyCount = repliesSnapshot.childrenCount.toInt()
-
-                    // Determine the latest reply (if any)
                     var latestReply: Reply? = null
                     for (child in repliesSnapshot.children) {
                         val replyBy = child.child("replyBy").getValue(String::class.java) ?: ""
                         val replyContent = child.child("replyContent").getValue(String::class.java) ?: ""
                         val replyTime = child.child("replyTime").getValue(String::class.java) ?: ""
-                        // Choose the reply with the greatest timestamp value
                         if (latestReply == null ||
                             (replyTime.toLongOrNull() ?: 0) > (latestReply.replyTime.toLongOrNull() ?: 0)
                         ) {
                             latestReply = Reply(replyBy = replyBy, replyContent = replyContent, replyTime = replyTime)
                         }
                     }
-
                     val forumThread = ForumThread(
                         id = id,
                         title = title,
@@ -371,9 +445,13 @@ fun ForumThreadItem(
     }
 }
 
+/* -----------------------------------------
+ * ThreadDetailScreen: Display thread details + replies.
+ * -----------------------------------------
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ThreadDetailScreen(threadId: String) {
+fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
     // State for the thread details
     val threadState = remember { mutableStateOf<ForumThread?>(null) }
     val loadingThread = remember { mutableStateOf(true) }
@@ -382,10 +460,11 @@ fun ThreadDetailScreen(threadId: String) {
     var showAddReplyDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
 
-    // Get current user name from SharedPreferences
+    // Get current user info from SharedPreferences
     val context = LocalContext.current
     val sp = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val currentUserName = sp.getString("name", "") ?: ""
+    val currentRole = sp.getString("role", "") ?: ""
 
     // Fetch thread details from Firebase
     LaunchedEffect(threadId) {
@@ -427,10 +506,16 @@ fun ThreadDetailScreen(threadId: String) {
             TopAppBar(
                 title = { Text("Thread Details") },
                 actions = {
-                    // Show edit button if current user is the thread owner
-                    if (threadState.value?.postedBy == currentUserName) {
+                    // Show edit and delete buttons if the current user is the thread owner or a teacher
+                    if (threadState.value?.postedBy == currentUserName || currentRole == "teacher") {
                         IconButton(onClick = { showEditDialog = true }) {
                             Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
+                        }
+                        IconButton(onClick = {
+                            deleteThreadFromFirebase(threadId)
+                            navController.popBackStack()
+                        }) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
                         }
                     }
                 }
@@ -511,7 +596,6 @@ fun ThreadDetailScreen(threadId: String) {
             onDismiss = { showEditDialog = false },
             onSubmit = { updatedThread ->
                 updateThreadInFirebase(threadId, updatedThread)
-                // Update local state with new values
                 threadState.value = threadState.value?.copy(
                     title = updatedThread.title,
                     msg = updatedThread.msg
@@ -520,76 +604,4 @@ fun ThreadDetailScreen(threadId: String) {
             }
         )
     }
-}
-
-/**
- * EditThreadDialog: Allows the owner to edit thread title and message.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun EditThreadDialog(
-    currentUserName: String,
-    initialTitle: String,
-    initialMsg: String,
-    onDismiss: () -> Unit,
-    onSubmit: (ForumThread) -> Unit
-) {
-    var title by remember { mutableStateOf(initialTitle) }
-    var msg by remember { mutableStateOf(initialMsg) }
-    val currentTime = remember {
-        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Edit Thread") },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Title") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = msg,
-                    onValueChange = { msg = it },
-                    label = { Text("Message") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Edited by: $currentUserName")
-                Text("Edited at: $currentTime")
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                onSubmit(
-                    ForumThread(
-                        title = title,
-                        msg = msg,
-                        postedBy = currentUserName,
-                        postedTime = currentTime
-                    )
-                )
-            }) { Text("Submit") }
-        },
-        dismissButton = {
-            Button(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
-
-/**
- * Updates a thread's title and message in Firebase.
- */
-fun updateThreadInFirebase(threadId: String, thread: ForumThread) {
-    val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
-    dbRef.updateChildren(
-        mapOf(
-            "title" to thread.title,
-            "msg" to thread.msg
-        )
-    )
 }
