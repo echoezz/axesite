@@ -27,7 +27,7 @@ fun ProfileScreen(navController: NavController) {
 
     LaunchedEffect(userId) {
         if (userId.isBlank()) {
-            navController.navigate("sign_in")
+            navController.navigate("signin")
             return@LaunchedEffect
         }
         val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
@@ -69,16 +69,9 @@ fun ProfileScreen(navController: NavController) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Role: $role", style = MaterialTheme.typography.bodyMedium)
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = {
-                        sharedPreferences.edit { clear() }
-                        navController.navigate("sign_in") {
-                            popUpTo("sign_in") { inclusive = true }
-                        }
-                    }) {
-                        Text("Log Out")
-                    }
                 }
             }
         }
     }
 }
+

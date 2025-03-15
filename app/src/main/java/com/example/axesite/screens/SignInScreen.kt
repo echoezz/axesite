@@ -78,7 +78,7 @@ fun SignInScreen(navController: NavController) {
                                         if (userRole == "teacher") {
                                             navController.navigate("enroll")
                                         } else {
-                                            navController.navigate("forum")
+                                            navController.navigate("home")
                                         }
                                     } else {
                                         errorMessage = "Password incorrect"
