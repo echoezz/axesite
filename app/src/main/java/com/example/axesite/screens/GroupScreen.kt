@@ -3,38 +3,31 @@
 package com.example.axesite.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.navigation.NavController
-import com.google.firebase.database.*
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import android.content.Context
+import com.google.firebase.database.*
 
-
-// Teacher Group Management Screen
 @Composable
 fun TeacherGroupManagementScreen(navController: NavController) {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
-
     val teacherId = sharedPreferences.getString("userId", null) ?: ""
     val userRole = sharedPreferences.getString("role", null) ?: ""
 
-    // Validate session
     LaunchedEffect(teacherId, userRole) {
-        if (teacherId.isBlank() || userRole.isBlank()) {
-            navController.navigate("sign_in")  // Redirect if session is missing
-            return@LaunchedEffect
-        }
-
-        if (userRole != "teacher") {
-            navController.navigate("student_group")  // Redirect students away from teacher screen
+        if (teacherId.isBlank() || userRole != "teacher") {
+            navController.navigate("sign_in")
             return@LaunchedEffect
         }
     }
@@ -42,11 +35,13 @@ fun TeacherGroupManagementScreen(navController: NavController) {
     val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
     val modulesRef = database.getReference("modules")
     val groupsRef = database.getReference("groups")
+    val enrollmentsRef = database.getReference("enrollments")
+    val usersRef = database.getReference("users")
 
     var modules by remember { mutableStateOf(listOf<Pair<String, String>>()) }
     var selectedModule by remember { mutableStateOf<Pair<String, String>?>(null) }
     var groups by remember { mutableStateOf(listOf<Pair<String, String>>()) }
-    var newGroupName by remember { mutableStateOf("") }
+    var students by remember { mutableStateOf(listOf<Pair<String, String>>()) }
 
     LaunchedEffect(Unit) {
         modulesRef.addListenerForSingleValueEvent(object : ValueEventListener {
@@ -57,7 +52,6 @@ fun TeacherGroupManagementScreen(navController: NavController) {
                     id to name
                 }
             }
-
             override fun onCancelled(error: DatabaseError) {}
         })
     }
@@ -66,42 +60,95 @@ fun TeacherGroupManagementScreen(navController: NavController) {
         Column(modifier = Modifier.padding(padding).padding(16.dp)) {
             DropdownMenuExample("Select Module", modules, selectedModule) { module ->
                 selectedModule = module
-                groupsRef.child(module.first)
-                    .addListenerForSingleValueEvent(object : ValueEventListener {
-                        override fun onDataChange(snapshot: DataSnapshot) {
-                            groups = snapshot.children.mapNotNull {
-                                val id = it.key ?: return@mapNotNull null
-                                val name = it.child("groupName").getValue(String::class.java) ?: "Unnamed"
-                                id to name
-                            }
+                groupsRef.child(module.first).addListenerForSingleValueEvent(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        groups = snapshot.children.mapNotNull {
+                            val id = it.key ?: return@mapNotNull null
+                            val name = it.child("groupName").getValue(String::class.java) ?: "Unnamed"
+                            id to name
                         }
-                        override fun onCancelled(error: DatabaseError) {}
-                    })
+                    }
+                    override fun onCancelled(error: DatabaseError) {}
+                })
+
+                enrollmentsRef.get().addOnSuccessListener { snapshot ->
+                    val enrolledStudentIds = snapshot.children.filter { it.child(module.first).exists() }.mapNotNull { it.key }
+                    usersRef.get().addOnSuccessListener { usersSnapshot ->
+                        students = usersSnapshot.children.filter { it.key in enrolledStudentIds }.mapNotNull {
+                            val id = it.key ?: return@mapNotNull null
+                            val name = it.child("name").getValue(String::class.java) ?: "Unnamed"
+                            id to name
+                        }
+                    }
+                }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            OutlinedTextField(
-                value = newGroupName,
-                onValueChange = { newGroupName = it },
-                label = { Text("New Group Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Button(onClick = {
-                selectedModule?.let { module ->
-                    val newGroupRef = groupsRef.child(module.first).push()
-                    newGroupRef.setValue(
-                        mapOf("groupName" to newGroupName, "createdBy" to teacherId)
-                    )
-                    newGroupName = ""
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Add Group", style = MaterialTheme.typography.bodyLarge)
+                IconButton(onClick = {
+                    selectedModule?.let { module ->
+                        groupsRef.child(module.first).get().addOnSuccessListener { snapshot ->
+                            val nextGroupNumber = snapshot.children.count() + 1
+                            val newGroupRef = groupsRef.child(module.first).push()
+                            newGroupRef.setValue(
+                                mapOf("groupName" to "Group $nextGroupNumber", "createdBy" to teacherId)
+                            ).addOnSuccessListener {
+                                groups = groups + (newGroupRef.key!! to "Group $nextGroupNumber")
+                            }
+                        }
+                    }
+                }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Group")
                 }
-            }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                Text("Create Group")
             }
 
-            groups.forEach { group ->
-                Text(group.second, style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(16.dp))
+
+            groups.forEachIndexed { index, group ->
+                var expanded by remember { mutableStateOf(false) }
+                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(group.second, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { expanded = !expanded }) {
+                                Icon(Icons.Default.Add, contentDescription = "Manage Members")
+                            }
+                            if (index == groups.size - 1) {
+                                IconButton(onClick = {
+                                    groupsRef.child(selectedModule!!.first).child(group.first).removeValue()
+                                    groups = groups.dropLast(1)
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Delete Group")
+                                }
+                            }
+                        }
+
+                        if (expanded) {
+                            students.forEach { student ->
+                                var isChecked by remember { mutableStateOf(false) }
+                                LaunchedEffect(Unit) {
+                                    groupsRef.child(selectedModule!!.first).child(group.first).child("members").child(student.first).get()
+                                        .addOnSuccessListener { snapshot ->
+                                            isChecked = snapshot.exists()
+                                        }
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { checked ->
+                                            isChecked = checked
+                                            val studentRef = groupsRef.child(selectedModule!!.first).child(group.first).child("members").child(student.first)
+                                            if (checked) studentRef.setValue(true) else studentRef.removeValue()
+                                        }
+                                    )
+                                    Text(student.second)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
