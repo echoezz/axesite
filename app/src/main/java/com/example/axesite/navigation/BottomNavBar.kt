@@ -13,18 +13,10 @@ import androidx.navigation.compose.*
 import com.example.axesite.screens.SignInScreen
 import com.example.axesite.screens.HomeScreen
 import com.example.axesite.screens.ModifyScreen
+import com.example.axesite.screens.ForumsScreen
 import com.example.axesite.screens.ProfileScreen
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.Color
-
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            BottomNavBarApp()
-        }
-    }
-}
 
 @Composable
 fun BottomNavBarApp() {
@@ -54,6 +46,7 @@ fun BottomNavBarApp() {
             composable("login") { SignInScreen(navController) }
             composable("home") { HomeScreen(navController) }
             composable("modify") { ModifyScreen() }
+            composable("forums") { ForumsScreen(navController) }
             composable("profile") { ProfileScreen(navController) }
         }
     }
@@ -64,6 +57,7 @@ fun BottomNavBar(navController: NavHostController) {
     val items = listOf(
         NavItem("Home", "home"),
         NavItem("Modify", "modify"),
+        NavItem("Forums", "forums"),
         NavItem("Profile", "profile")
     )
 
