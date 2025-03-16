@@ -5,6 +5,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
+import com.google.firebase.ktx.Firebase
+import com.google.firebase.storage.ktx.storage
 import com.example.axesite.navigation.AuthNavGraph
 
 class MainActivity : ComponentActivity() {

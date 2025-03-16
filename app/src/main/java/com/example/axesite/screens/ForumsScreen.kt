@@ -1,6 +1,12 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.axesite.screens
 
 import android.content.Context
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,11 +24,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
-import com.google.firebase.database.*
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.storage.FirebaseStorage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.io.Serializable
+
+// To display images
+import coil.compose.AsyncImage
+
+// Camera
+import androidx.core.content.FileProvider
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.File
 
 /* -----------------------------------------
  * Data Classes
@@ -39,7 +57,9 @@ data class ForumThread(
     val msg: String = "",
     val postedBy: String = "",
     val postedTime: String = "",
-    val replyCount: Int = 0
+    val replyCount: Int = 0,
+    val imageUrl: String = "",       // Download URL for the uploaded image.
+    val imageFilename: String = ""   // The filename used for the image (e.g., "161234567890.jpg").
 ) : Serializable
 
 /**
@@ -75,7 +95,9 @@ fun addThreadToFirebase(thread: ForumThread) {
             "title" to thread.title,
             "msg" to thread.msg,
             "postedBy" to thread.postedBy,
-            "postedTime" to thread.postedTime
+            "postedTime" to thread.postedTime,
+            "imageUrl" to thread.imageUrl,
+            "imageFilename" to thread.imageFilename
         )
     )
 }
@@ -97,20 +119,22 @@ fun addReplyToFirebase(threadId: String, reply: Reply) {
 }
 
 /**
- * Updates a thread's title and message in Firebase.
+ * Updates a thread's title, message, imageUrl, and imageFilename in Firebase.
  */
 fun updateThreadInFirebase(threadId: String, thread: ForumThread) {
     val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
     dbRef.updateChildren(
         mapOf(
             "title" to thread.title,
-            "msg" to thread.msg
+            "msg" to thread.msg,
+            "imageUrl" to thread.imageUrl,
+            "imageFilename" to thread.imageFilename
         )
     )
 }
 
 /**
- * Deletes a thread from Firebase.
+ * Deletes a thread from Firebase Realtime Database.
  */
 fun deleteThreadFromFirebase(threadId: String) {
     val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
@@ -118,7 +142,7 @@ fun deleteThreadFromFirebase(threadId: String) {
 }
 
 /* -----------------------------------------
- * AddThreadDialog: For adding a new thread.
+ * AddThreadDialog: For adding a new thread with image upload.
  * -----------------------------------------
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,8 +154,62 @@ fun AddThreadDialog(
 ) {
     var title by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    // This will hold the selected image URI from either the gallery or camera.
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    val context = LocalContext.current
+
+    // Launcher for picking an image from the gallery.
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedImageUri = it }
+    }
+
+    // Launcher for taking a picture with the camera.
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success) {
+            // If successful, selectedImageUri is already set.
+        }
+    }
+
+    // Function to create a temporary URI for the camera capture.
+    fun createTempImageUri(context: Context): Uri {
+        val tempFile = File.createTempFile("temp_image", ".jpg", context.cacheDir)
+        // Make sure your FileProvider is correctly configured in your manifest.
+        return FileProvider.getUriForFile(context, "${context.packageName}.provider", tempFile)
+    }
+
+    // Get current time as a formatted string.
     val currentTime = remember {
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+    }
+
+    // Function to upload an image to Firebase Storage and return its download URL and filename.
+    fun uploadImageWithFilename(
+        uri: Uri,
+        onSuccess: (downloadUrl: String, filename: String) -> Unit,
+        onFailure: (Exception) -> Unit
+    ) {
+        val storage = FirebaseStorage.getInstance("gs://mobile-sec-b6625.firebasestorage.app")
+        val storageRef = storage.reference
+        // Create a unique image filename.
+        val filename = "${System.currentTimeMillis()}.jpg"
+        val imageRef = storageRef.child("images/$filename")
+        imageRef.putFile(uri)
+            .addOnSuccessListener {
+                imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
+                    onSuccess(downloadUri.toString(), filename)
+                }.addOnFailureListener { exception ->
+                    Log.e("Upload", "Download URL retrieval failed: ${exception.message}")
+                    onFailure(exception)
+                }
+            }
+            .addOnFailureListener { exception ->
+                Log.e("Upload", "Image upload failed: ${exception.message}")
+                onFailure(exception)
+            }
     }
 
     AlertDialog(
@@ -153,21 +231,75 @@ fun AddThreadDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                // Two buttons: one for gallery, one for camera.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Button(onClick = { galleryLauncher.launch("image/*") }) {
+                        Text("Upload Photo")
+                    }
+                    Button(onClick = {
+                        // Create a temporary URI and launch the camera.
+                        val tempUri = createTempImageUri(context)
+                        selectedImageUri = tempUri
+                        cameraLauncher.launch(tempUri)
+                    }) {
+                        Text("Take Picture")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                selectedImageUri?.let { uri ->
+                    Text("Photo selected: $uri")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Text("Posted by: $currentUserName")
                 Text("Time: $currentTime")
             }
         },
         confirmButton = {
             Button(onClick = {
-                onSubmit(
-                    ForumThread(
-                        title = title,
-                        msg = msg,
-                        postedBy = currentUserName,
-                        postedTime = currentTime
+                if (selectedImageUri != null) {
+                    // Upload the image and then submit the thread with its download URL and filename.
+                    uploadImageWithFilename(selectedImageUri!!, onSuccess = { downloadUrl, filename ->
+                        onSubmit(
+                            ForumThread(
+                                title = title,
+                                msg = msg,
+                                postedBy = currentUserName,
+                                postedTime = currentTime,
+                                imageUrl = downloadUrl,
+                                imageFilename = filename
+                            )
+                        )
+                    }, onFailure = { exception ->
+                        // If image upload fails, submit thread without image.
+                        onSubmit(
+                            ForumThread(
+                                title = title,
+                                msg = msg,
+                                postedBy = currentUserName,
+                                postedTime = currentTime,
+                                imageUrl = "",
+                                imageFilename = ""
+                            )
+                        )
+                    })
+                } else {
+                    onSubmit(
+                        ForumThread(
+                            title = title,
+                            msg = msg,
+                            postedBy = currentUserName,
+                            postedTime = currentTime,
+                            imageUrl = "",
+                            imageFilename = ""
+                        )
                     )
-                )
-            }) { Text("Submit") }
+                }
+            }) {
+                Text("Submit")
+            }
         },
         dismissButton = {
             Button(onClick = onDismiss) { Text("Cancel") }
@@ -289,18 +421,18 @@ fun AddReplyDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ForumsScreen(navController: NavHostController) {
-    // Retrieve user session info from SharedPreferences
+    // Retrieve user session info from SharedPreferences.
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val userNameFromPrefs = sharedPreferences.getString("name", "") ?: ""
 
     val forumTitle = "axeSite forum"
 
-    // State for threads list
+    // State for threads list.
     val threadsState = remember { mutableStateOf<List<ThreadWithLastReply>>(emptyList()) }
     var showAddDialog by remember { mutableStateOf(false) }
 
-    // Listen to "forums" node in Firebase
+    // Listen to "forums" node in Firebase.
     DisposableEffect(Unit) {
         val dbRef = FirebaseDatabase.getInstance().getReference("forums")
         val listener = object : ValueEventListener {
@@ -312,7 +444,9 @@ fun ForumsScreen(navController: NavHostController) {
                     val msg = forumSnapshot.child("msg").getValue(String::class.java) ?: ""
                     val postedBy = forumSnapshot.child("postedBy").getValue(String::class.java) ?: ""
                     val postedTime = forumSnapshot.child("postedTime").getValue(String::class.java) ?: ""
-                    // Replies
+                    val imageUrl = forumSnapshot.child("imageUrl").getValue(String::class.java) ?: ""
+                    val imageFilename = forumSnapshot.child("imageFilename").getValue(String::class.java) ?: ""
+                    // Replies.
                     val repliesSnapshot = forumSnapshot.child("replies")
                     val replyCount = repliesSnapshot.childrenCount.toInt()
                     var latestReply: Reply? = null
@@ -332,7 +466,9 @@ fun ForumsScreen(navController: NavHostController) {
                         msg = msg,
                         postedBy = postedBy,
                         postedTime = postedTime,
-                        replyCount = replyCount
+                        replyCount = replyCount,
+                        imageUrl = imageUrl,
+                        imageFilename = imageFilename
                     )
                     newList.add(ThreadWithLastReply(forumThread, latestReply))
                 }
@@ -452,26 +588,27 @@ fun ForumThreadItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
-    // State for the thread details
+    // State for the thread details.
     val threadState = remember { mutableStateOf<ForumThread?>(null) }
     val loadingThread = remember { mutableStateOf(true) }
-    // State for replies list
+    // State for replies list.
     val repliesState = remember { mutableStateOf<List<Reply>>(emptyList()) }
     var showAddReplyDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
 
-    // Get current user info from SharedPreferences
+    // Get current user info from SharedPreferences.
     val context = LocalContext.current
     val sp = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val currentUserName = sp.getString("name", "") ?: ""
     val currentRole = sp.getString("role", "") ?: ""
 
-    // Fetch thread details from Firebase
+    // Fetch thread details from Firebase. Note: assign snapshot key to thread.id.
     LaunchedEffect(threadId) {
         val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
         dbRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                threadState.value = snapshot.getValue(ForumThread::class.java)
+                val thread = snapshot.getValue(ForumThread::class.java)
+                threadState.value = thread?.copy(id = snapshot.key ?: "")
                 loadingThread.value = false
             }
             override fun onCancelled(error: DatabaseError) {
@@ -480,7 +617,7 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
         })
     }
 
-    // Listen to replies under this thread
+    // Listen to replies under this thread.
     DisposableEffect(threadId) {
         val repliesRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId).child("replies")
         val listener = object : ValueEventListener {
@@ -506,14 +643,20 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
             TopAppBar(
                 title = { Text("Thread Details") },
                 actions = {
-                    // Show edit and delete buttons if the current user is the thread owner or a teacher
+                    // Show edit and delete buttons if the current user is the thread owner or a teacher.
                     if (threadState.value?.postedBy == currentUserName || currentRole == "teacher") {
                         IconButton(onClick = { showEditDialog = true }) {
                             Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
                         }
                         IconButton(onClick = {
-                            deleteThreadFromFirebase(threadId)
-                            navController.popBackStack()
+                            threadState.value?.let { thread ->
+                                deleteThreadAndImage(thread,
+                                    onComplete = { navController.popBackStack() },
+                                    onError = { exception ->
+                                        Log.e("Delete", "Error deleting thread: ${exception.message}")
+                                    }
+                                )
+                            }
                         }) {
                             Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
                         }
@@ -556,6 +699,17 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
                 ) {
                     Text("Title: ${thread.title}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
+                    // Display the thread image if present.
+                    if (thread.imageUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = thread.imageUrl,
+                            contentDescription = "Thread Image",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     Text("Message: ${thread.msg}", fontSize = 16.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Posted by: ${thread.postedBy}", fontSize = 14.sp)
@@ -603,5 +757,30 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
                 showEditDialog = false
             }
         )
+    }
+}
+
+/**
+ * Deletes the thread and its associated image from Firebase Storage (if imageFilename is provided),
+ * then deletes the thread from Realtime Database.
+ */
+fun deleteThreadAndImage(
+    thread: ForumThread,
+    onComplete: () -> Unit,
+    onError: (Exception) -> Unit
+) {
+    if (thread.imageFilename.isNotEmpty()) {
+        val storage = FirebaseStorage.getInstance("gs://mobile-sec-b6625.firebasestorage.app")
+        val storageRef = storage.reference
+        val imageRef = storageRef.child("images/${thread.imageFilename}")
+        imageRef.delete().addOnSuccessListener {
+            deleteThreadFromFirebase(thread.id)
+            onComplete()
+        }.addOnFailureListener { exception ->
+            onError(exception)
+        }
+    } else {
+        deleteThreadFromFirebase(thread.id)
+        onComplete()
     }
 }
