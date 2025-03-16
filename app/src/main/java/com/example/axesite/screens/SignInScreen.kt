@@ -79,6 +79,7 @@ fun SignInScreen(navController: NavController) {
                                             navController.navigate("home")
                                         } else {
                                             navController.navigate("home")
+
                                         }
                                     } else {
                                         errorMessage = "Password incorrect"
