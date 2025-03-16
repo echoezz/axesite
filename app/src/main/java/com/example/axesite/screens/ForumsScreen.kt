@@ -33,7 +33,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.io.Serializable
+
+// To display images
 import coil.compose.AsyncImage
+
+// Camera
+import androidx.core.content.FileProvider
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.File
 
 /* -----------------------------------------
  * Data Classes
@@ -147,14 +154,34 @@ fun AddThreadDialog(
 ) {
     var title by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    // This will hold the selected image URI from either the gallery or camera.
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     val context = LocalContext.current
 
     // Launcher for picking an image from the gallery.
-    val galleryLauncher = rememberLauncherForActivityResult(contract = GetContent()) { uri: Uri? ->
-        selectedImageUri = uri
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { selectedImageUri = it }
     }
 
+    // Launcher for taking a picture with the camera.
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success) {
+            // If successful, selectedImageUri is already set.
+        }
+    }
+
+    // Function to create a temporary URI for the camera capture.
+    fun createTempImageUri(context: Context): Uri {
+        val tempFile = File.createTempFile("temp_image", ".jpg", context.cacheDir)
+        // Make sure your FileProvider is correctly configured in your manifest.
+        return FileProvider.getUriForFile(context, "${context.packageName}.provider", tempFile)
+    }
+
+    // Get current time as a formatted string.
     val currentTime = remember {
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
     }
@@ -204,8 +231,22 @@ fun AddThreadDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(onClick = { galleryLauncher.launch("image/*") }) {
-                    Text("Upload Photo")
+                // Two buttons: one for gallery, one for camera.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Button(onClick = { galleryLauncher.launch("image/*") }) {
+                        Text("Upload Photo")
+                    }
+                    Button(onClick = {
+                        // Create a temporary URI and launch the camera.
+                        val tempUri = createTempImageUri(context)
+                        selectedImageUri = tempUri
+                        cameraLauncher.launch(tempUri)
+                    }) {
+                        Text("Take Picture")
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 selectedImageUri?.let { uri ->
@@ -219,6 +260,7 @@ fun AddThreadDialog(
         confirmButton = {
             Button(onClick = {
                 if (selectedImageUri != null) {
+                    // Upload the image and then submit the thread with its download URL and filename.
                     uploadImageWithFilename(selectedImageUri!!, onSuccess = { downloadUrl, filename ->
                         onSubmit(
                             ForumThread(
