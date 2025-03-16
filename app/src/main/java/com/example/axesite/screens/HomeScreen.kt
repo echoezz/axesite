@@ -94,7 +94,7 @@ fun HomeScreen(navController: NavHostController) {
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(
-                        onClick = { navController.navigate("forum") },
+                        onClick = { navController.navigate("forums") },
                         modifier = Modifier.fillMaxWidth(0.8f)
                     ) {
                         Text("Go to Forum")

@@ -511,6 +511,7 @@ fun ForumsScreen(navController: NavHostController) {
             LazyColumn {
                 items(threadsState.value) { item ->
                     ForumThreadItem(item, onItemClick = { thread ->
+                        Log.d("ForumThreadItem", "Navigating to thread with id: ${thread.id}")
                         navController.navigate("threadDetail/${thread.id}")
                     })
                     Divider()

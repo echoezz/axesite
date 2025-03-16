@@ -22,10 +22,10 @@ fun AuthNavGraph(navController: NavHostController) {
         composable("home") { HomeScreen(navController) }
         composable("threadDetail/{threadId}") { backStackEntry ->
             val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
-            ThreadDetailScreen(navController=navController,threadId = threadId)
+            ThreadDetailScreen(navController, threadId)
         }
         composable("profile") { ProfileScreen(navController) }
-        composable("forum") { ForumsScreen(navController) } // edited here
+        composable("forums") { ForumsScreen(navController) } // edited here
         composable("enroll") { EnrollmentScreen(navController)}
         composable("teacher_group") { TeacherGroupManagementScreen(navController) }
         composable("student_group") { StudentGroupJoinScreen(navController) }
