@@ -156,13 +156,15 @@ private fun fetchModuleNames(
         modulesRef.child(moduleId).addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 // Assuming the module node contains a field "moduleName"
-                val moduleName = snapshot.child("moduleName").getValue(String::class.java) ?: moduleId
+                val moduleName =
+                    snapshot.child("moduleName").getValue(String::class.java) ?: moduleId
                 moduleNames.add(moduleName)
                 remaining--
                 if (remaining <= 0) {
                     onComplete(moduleNames)
                 }
             }
+
             override fun onCancelled(error: DatabaseError) {
                 remaining--
                 if (remaining <= 0) {
@@ -170,14 +172,5 @@ private fun fetchModuleNames(
                 }
             }
         })
-fun HomeScreen() {
-    Log.d("BottomNavBar", "HomeScreen displayed")
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Home Screen")
     }
 }
-

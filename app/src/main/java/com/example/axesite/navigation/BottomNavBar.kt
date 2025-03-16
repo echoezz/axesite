@@ -52,9 +52,9 @@ fun BottomNavBarApp() {
                 .fillMaxSize()
         ) {
             composable("login") { SignInScreen(navController) }
-            composable("home") { HomeScreen() }
+            composable("home") { HomeScreen(navController) }
             composable("modify") { ModifyScreen() }
-            composable("profile") { ProfileScreen() }
+            composable("profile") { ProfileScreen(navController) }
         }
     }
 }
