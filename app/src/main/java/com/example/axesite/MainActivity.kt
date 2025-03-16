@@ -8,6 +8,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.storage.ktx.storage
 import com.example.axesite.navigation.AuthNavGraph
+import com.example.axesite.navigation.BottomNavBarApp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -17,6 +18,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val navController = rememberNavController()
             AuthNavGraph(navController)
+            BottomNavBarApp()
         }
     }
 }
