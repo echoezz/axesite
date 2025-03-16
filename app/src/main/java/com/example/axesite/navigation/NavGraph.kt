@@ -17,7 +17,7 @@ fun AuthNavGraph(navController: NavHostController) {
     NavHost(navController, startDestination = "signin") {
         composable("signin") { SignInScreen(navController) }
         composable("signup") { SignUpScreen(navController) }
-        composable("home") { HomeScreen() }
+        composable("home") { HomeScreen(navController) }
         composable("threadDetail/{threadId}") { backStackEntry ->
             val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
             ThreadDetailScreen(navController=navController,threadId = threadId)
