@@ -33,6 +33,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.io.Serializable
+import coil.compose.AsyncImage
 
 /* -----------------------------------------
  * Data Classes
@@ -656,6 +657,17 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
                 ) {
                     Text("Title: ${thread.title}", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
+                    // Display the thread image if present.
+                    if (thread.imageUrl.isNotEmpty()) {
+                        AsyncImage(
+                            model = thread.imageUrl,
+                            contentDescription = "Thread Image",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     Text("Message: ${thread.msg}", fontSize = 16.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Posted by: ${thread.postedBy}", fontSize = 14.sp)
