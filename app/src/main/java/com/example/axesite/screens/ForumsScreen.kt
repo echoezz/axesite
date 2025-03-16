@@ -1,6 +1,10 @@
 package com.example.axesite.screens
 
 import android.content.Context
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.google.firebase.database.*
+import com.google.firebase.storage.FirebaseStorage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -39,7 +44,8 @@ data class ForumThread(
     val msg: String = "",
     val postedBy: String = "",
     val postedTime: String = "",
-    val replyCount: Int = 0
+    val replyCount: Int = 0,
+    val imageUrl: String = ""  // New field for the uploaded image URL.
 ) : Serializable
 
 /**
@@ -75,7 +81,8 @@ fun addThreadToFirebase(thread: ForumThread) {
             "title" to thread.title,
             "msg" to thread.msg,
             "postedBy" to thread.postedBy,
-            "postedTime" to thread.postedTime
+            "postedTime" to thread.postedTime,
+            "imageUrl" to thread.imageUrl
         )
     )
 }
@@ -117,6 +124,7 @@ fun deleteThreadFromFirebase(threadId: String) {
     dbRef.removeValue()
 }
 
+
 /* -----------------------------------------
  * AddThreadDialog: For adding a new thread.
  * -----------------------------------------
@@ -130,8 +138,39 @@ fun AddThreadDialog(
 ) {
     var title by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    val context = LocalContext.current
+
+    // Launcher for picking an image from the gallery.
+    val galleryLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+        selectedImageUri = uri
+    }
+
+    // Get current time as a formatted string.
     val currentTime = remember {
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
+    }
+
+    // Function to upload an image to Firebase Storage.
+    fun uploadImage(uri: Uri, onSuccess: (String) -> Unit, onFailure: (Exception) -> Unit) {
+        val storage = FirebaseStorage.getInstance("gs://mobile-sec-b6625.firebasestorage.app")
+        val storageRef = storage.reference
+        // Create a unique image file name.
+        val uriValue = System.currentTimeMillis().toString()
+        val imageRef = storageRef.child("images/${uriValue}.jpg")
+
+        imageRef.putFile(uri)
+            .addOnSuccessListener {
+                imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
+                    onSuccess(downloadUri.toString())
+                }.addOnFailureListener { exception ->
+                    onFailure(exception)
+                }
+            }
+            .addOnFailureListener { exception ->
+                Log.e("Upload", "Image upload failed: ${exception.message}")
+                onFailure(exception)
+            }
     }
 
     AlertDialog(
@@ -153,28 +192,67 @@ fun AddThreadDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                Button(onClick = { galleryLauncher.launch("image/*") }) {
+                    Text("Upload Photo")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                // Use a local variable to safely smart cast.
+                val capturedUri = selectedImageUri
+                capturedUri?.let { uri ->
+                    Text("Photo selected: $uri")
+                }
+                Spacer(modifier = Modifier.height(8.dp))
                 Text("Posted by: $currentUserName")
                 Text("Time: $currentTime")
             }
         },
         confirmButton = {
             Button(onClick = {
-                onSubmit(
-                    ForumThread(
-                        title = title,
-                        msg = msg,
-                        postedBy = currentUserName,
-                        postedTime = currentTime
+                if (selectedImageUri != null) {
+                    // Upload the image first and then submit the thread with its download URL.
+                    uploadImage(selectedImageUri!!, onSuccess = { downloadUrl ->
+                        onSubmit(
+                            ForumThread(
+                                title = title,
+                                msg = msg,
+                                postedBy = currentUserName,
+                                postedTime = currentTime,
+                                imageUrl = downloadUrl
+                            )
+                        )
+                    }, onFailure = { exception ->
+                        // If upload fails, proceed without the image.
+                        onSubmit(
+                            ForumThread(
+                                title = title,
+                                msg = msg,
+                                postedBy = currentUserName,
+                                postedTime = currentTime,
+                                imageUrl = ""
+                            )
+                        )
+                    })
+                } else {
+                    // No image selected; submit thread without image.
+                    onSubmit(
+                        ForumThread(
+                            title = title,
+                            msg = msg,
+                            postedBy = currentUserName,
+                            postedTime = currentTime,
+                            imageUrl = ""
+                        )
                     )
-                )
-            }) { Text("Submit") }
+                }
+            }) {
+                Text("Submit")
+            }
         },
         dismissButton = {
             Button(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }
-
 /* -----------------------------------------
  * EditThreadDialog: For editing a thread.
  * -----------------------------------------
