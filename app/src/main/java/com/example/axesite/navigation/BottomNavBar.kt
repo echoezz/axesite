@@ -18,6 +18,7 @@ import com.example.axesite.screens.ProfileScreen
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.Color
 import com.example.axesite.screens.EnrollmentScreen
+import com.example.axesite.screens.SignUpScreen
 import com.example.axesite.screens.StudentGroupJoinScreen
 import com.example.axesite.screens.TeacherGroupManagementScreen
 import com.example.axesite.screens.ThreadDetailScreen
@@ -51,6 +52,7 @@ fun BottomNavBarApp() {
             composable("home") { HomeScreen(navController) }
             composable("modify") { ModifyScreen() }
             composable("forums") { ForumsScreen(navController) }
+            composable("signup") { SignUpScreen(navController) }
             composable("threadDetail/{threadId}") { backStackEntry ->
                 val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
                 Log.d("ThreadDetail", "Navigating to threadId: $threadId")
