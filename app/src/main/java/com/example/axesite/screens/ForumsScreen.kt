@@ -40,7 +40,12 @@ import coil.compose.AsyncImage
 // Camera
 import androidx.core.content.FileProvider
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import java.io.File
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+
 
 /* -----------------------------------------
  * Data Classes
@@ -154,7 +159,6 @@ fun AddThreadDialog(
 ) {
     var title by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
-    // This will hold the selected image URI from either the gallery or camera.
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     val context = LocalContext.current
 
@@ -171,14 +175,28 @@ fun AddThreadDialog(
     ) { success: Boolean ->
         if (success) {
             // If successful, selectedImageUri is already set.
+
         }
     }
-
     // Function to create a temporary URI for the camera capture.
     fun createTempImageUri(context: Context): Uri {
         val tempFile = File.createTempFile("temp_image", ".jpg", context.cacheDir)
-        // Make sure your FileProvider is correctly configured in your manifest.
         return FileProvider.getUriForFile(context, "${context.packageName}.provider", tempFile)
+    }
+
+    // Launcher for requesting the CAMERA permission.
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Permission granted: create URI and launch camera.
+            val tempUri = createTempImageUri(context)
+            selectedImageUri = tempUri
+            cameraLauncher.launch(tempUri)
+        } else {
+            // Handle the case when permission is denied (e.g., show a message).
+            Log.d("CameraPermission", "Camera permission denied")
+        }
     }
 
     // Get current time as a formatted string.
@@ -240,10 +258,16 @@ fun AddThreadDialog(
                         Text("Upload Photo")
                     }
                     Button(onClick = {
-                        // Create a temporary URI and launch the camera.
-                        val tempUri = createTempImageUri(context)
-                        selectedImageUri = tempUri
-                        cameraLauncher.launch(tempUri)
+                        // Check if CAMERA permission is granted.
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                            == PackageManager.PERMISSION_GRANTED) {
+                            val tempUri = createTempImageUri(context)
+                            selectedImageUri = tempUri
+                            cameraLauncher.launch(tempUri)
+                        } else {
+                            // Request the CAMERA permission.
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
                     }) {
                         Text("Take Picture")
                     }
@@ -260,7 +284,6 @@ fun AddThreadDialog(
         confirmButton = {
             Button(onClick = {
                 if (selectedImageUri != null) {
-                    // Upload the image and then submit the thread with its download URL and filename.
                     uploadImageWithFilename(selectedImageUri!!, onSuccess = { downloadUrl, filename ->
                         onSubmit(
                             ForumThread(
@@ -273,7 +296,6 @@ fun AddThreadDialog(
                             )
                         )
                     }, onFailure = { exception ->
-                        // If image upload fails, submit thread without image.
                         onSubmit(
                             ForumThread(
                                 title = title,
@@ -507,13 +529,14 @@ fun ForumsScreen(navController: NavHostController) {
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
-            Divider()
+            HorizontalDivider()
             LazyColumn {
                 items(threadsState.value) { item ->
                     ForumThreadItem(item, onItemClick = { thread ->
+                        Log.d("ForumThreadItem", "Navigating to thread with id: ${thread.id}")
                         navController.navigate("threadDetail/${thread.id}")
                     })
-                    Divider()
+                    HorizontalDivider()
                 }
             }
         }
@@ -723,7 +746,7 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
                                 Text(reply.replyContent)
                                 Text("At: ${reply.replyTime}", fontSize = 12.sp)
                             }
-                            Divider()
+                            HorizontalDivider()
                         }
                     }
                 }
