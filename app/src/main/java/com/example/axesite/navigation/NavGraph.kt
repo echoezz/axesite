@@ -13,6 +13,7 @@ import com.example.axesite.screens.EnrollmentScreen
 import com.example.axesite.screens.StudentGroupJoinScreen
 import com.example.axesite.screens.TeacherGroupManagementScreen
 import com.example.axesite.screens.ThreadDetailScreen
+import com.example.axesite.screens.ChatScreen
 
 @Composable
 fun AuthNavGraph(navController: NavHostController) {
@@ -23,6 +24,10 @@ fun AuthNavGraph(navController: NavHostController) {
         composable("threadDetail/{threadId}") { backStackEntry ->
             val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
             ThreadDetailScreen(navController, threadId)
+        }
+        composable("chat/{chatId}") { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
+            ChatScreen(navController, chatId)
         }
         composable("profile") { ProfileScreen(navController) }
         composable("forums") { ForumsScreen(navController) } // edited here

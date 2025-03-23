@@ -1,6 +1,6 @@
 package com.example.axesite.navigation
 
-import android.os.Bundle
+
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,6 +17,7 @@ import com.example.axesite.screens.ForumsScreen
 import com.example.axesite.screens.ProfileScreen
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.Color
+import com.example.axesite.screens.ChatScreen
 import com.example.axesite.screens.EnrollmentScreen
 import com.example.axesite.screens.SignUpScreen
 import com.example.axesite.screens.StudentGroupJoinScreen
@@ -50,13 +51,17 @@ fun BottomNavBarApp() {
         ) {
             composable("login") { SignInScreen(navController) }
             composable("home") { HomeScreen(navController) }
-            composable("modify") { ModifyScreen() }
+            composable("modify") { ModifyScreen(navController) }
             composable("forums") { ForumsScreen(navController) }
             composable("signup") { SignUpScreen(navController) }
             composable("threadDetail/{threadId}") { backStackEntry ->
                 val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
                 Log.d("ThreadDetail", "Navigating to threadId: $threadId")
                 ThreadDetailScreen(navController, threadId)
+            }
+            composable("chat/{chatId}") { backStackEntry ->
+                val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
+                ChatScreen(navController, chatId)
             }
             composable("profile") { ProfileScreen(navController) }
             composable("enroll") { EnrollmentScreen(navController) }
@@ -70,7 +75,7 @@ fun BottomNavBarApp() {
 fun BottomNavBar(navController: NavHostController) {
     val items = listOf(
         NavItem("Home", "home"),
-        NavItem("Modify", "modify"),
+        NavItem("Chat", "modify"),
         NavItem("Forums", "forums"),
         NavItem("Profile", "profile")
     )
