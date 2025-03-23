@@ -61,7 +61,7 @@ fun BottomNavBarApp() {
             }
             composable("chat/{chatId}") { backStackEntry ->
                 val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
-                ChatScreen(navController, chatId)
+                ChatScreen(chatId)
             }
             composable("profile") { ProfileScreen(navController) }
             composable("enroll") { EnrollmentScreen(navController) }

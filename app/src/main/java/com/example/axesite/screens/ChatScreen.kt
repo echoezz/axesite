@@ -10,7 +10,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
@@ -20,7 +19,7 @@ import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(navController: NavController, chatId: String) {
+fun ChatScreen(chatId: String) {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val currentUserId = sharedPreferences.getString("userId", "") ?: ""

@@ -27,7 +27,7 @@ fun AuthNavGraph(navController: NavHostController) {
         }
         composable("chat/{chatId}") { backStackEntry ->
             val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
-            ChatScreen(navController, chatId)
+            ChatScreen(chatId)
         }
         composable("profile") { ProfileScreen(navController) }
         composable("forums") { ForumsScreen(navController) } // edited here
