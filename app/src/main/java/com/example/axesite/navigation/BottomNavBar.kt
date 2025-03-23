@@ -17,6 +17,7 @@ import com.example.axesite.screens.ForumsScreen
 import com.example.axesite.screens.ProfileScreen
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.graphics.Color
+import com.example.axesite.screens.AttendanceScreen
 import com.example.axesite.screens.ChatScreen
 import com.example.axesite.screens.EnrollmentScreen
 import com.example.axesite.screens.SignUpScreen
@@ -56,7 +57,6 @@ fun BottomNavBarApp() {
             composable("signup") { SignUpScreen(navController) }
             composable("threadDetail/{threadId}") { backStackEntry ->
                 val threadId = backStackEntry.arguments?.getString("threadId") ?: ""
-                Log.d("ThreadDetail", "Navigating to threadId: $threadId")
                 ThreadDetailScreen(navController, threadId)
             }
             composable("chat/{chatId}") { backStackEntry ->
@@ -64,6 +64,7 @@ fun BottomNavBarApp() {
                 ChatScreen(chatId)
             }
             composable("profile") { ProfileScreen(navController) }
+            composable("attendance") { AttendanceScreen(navController) }
             composable("enroll") { EnrollmentScreen(navController) }
             composable("teacher_group") { TeacherGroupManagementScreen(navController) }
             composable("student_group") { StudentGroupJoinScreen(navController) }
@@ -77,7 +78,7 @@ fun BottomNavBar(navController: NavHostController) {
         NavItem("Home", "home"),
         NavItem("Chat", "modify"),
         NavItem("Forums", "forums"),
-        NavItem("Profile", "profile")
+        NavItem("Profile", "profile"),
     )
 
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route

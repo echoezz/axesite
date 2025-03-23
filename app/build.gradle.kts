@@ -68,5 +68,7 @@ dependencies {
     implementation("com.google.firebase:firebase-storage-ktx")
     implementation("io.coil-kt:coil-compose:2.4.0")
     implementation("androidx.activity:activity-compose:1.6.1")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+
 
 }

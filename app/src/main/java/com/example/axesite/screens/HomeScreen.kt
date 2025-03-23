@@ -106,6 +106,15 @@ fun HomeScreen(navController: NavHostController) {
                     ) {
                         Text("Go to Profile")
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { navController.navigate("attendance") },
+                        modifier = Modifier.fillMaxWidth(0.8f)
+                    ) {
+                        Text("Attendance")
+                    }
+
+
                     // Teachers see an extra Enrollment button
                     if (userRole == "teacher") {
                         Spacer(modifier = Modifier.height(8.dp))
