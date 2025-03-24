@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.example.axesite.screens.AttendanceScreen
 import com.example.axesite.screens.ForumsScreen // imported this
 import com.example.axesite.screens.SignInScreen
 import com.example.axesite.screens.SignUpScreen
@@ -30,8 +31,9 @@ fun AuthNavGraph(navController: NavHostController) {
             ChatScreen(chatId)
         }
         composable("profile") { ProfileScreen(navController) }
-        composable("forums") { ForumsScreen(navController) } // edited here
+        composable("forums") { ForumsScreen(navController) }
         composable("enroll") { EnrollmentScreen(navController)}
+        composable("attendance") { AttendanceScreen(navController) }
         composable("teacher_group") { TeacherGroupManagementScreen(navController) }
         composable("student_group") { StudentGroupJoinScreen(navController) }
 
