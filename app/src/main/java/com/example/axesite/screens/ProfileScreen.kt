@@ -2,11 +2,17 @@
 
 package com.example.axesite.screens
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.util.Log
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts.GetContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,16 +26,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.core.content.edit
 import coil.compose.AsyncImage
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.storage.FirebaseStorage
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import androidx.core.content.ContextCompat
+import android.util.Log
 
 @Composable
 fun ProfileScreen(navController: NavController) {
@@ -43,16 +47,95 @@ fun ProfileScreen(navController: NavController) {
     var profilePicUrl by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
 
-    // Launcher to pick a new profile picture from the gallery.
-    val galleryLauncher = rememberLauncherForActivityResult(contract = GetContent()) { uri: Uri? ->
+    // Gallery launcher
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
         uri?.let {
-            // Upload the image and update profilePicUrl in database.
             uploadProfileImage(it, userId) { downloadUrl ->
                 profilePicUrl = downloadUrl
             }
         }
     }
 
+    // Permission launcher for Android 10 and below
+    val legacyPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            galleryLauncher.launch("image/*")
+        } else {
+            Toast.makeText(
+                context,
+                "Storage permission is required to change profile picture",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    // Permission launcher for Android 11+ (MANAGE_EXTERNAL_STORAGE)
+    val manageStorageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                galleryLauncher.launch("image/*")
+            } else {
+                Toast.makeText(
+                    context,
+                    "Storage permission is required to change profile picture",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    // Function to handle image selection with proper permission checks
+    fun handleImageSelection() {
+        when {
+            // Android 11+ - Use MANAGE_EXTERNAL_STORAGE
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                if (Environment.isExternalStorageManager()) {
+                    galleryLauncher.launch("image/*")
+                } else {
+                    try {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                        intent.data = Uri.parse("package:${context.packageName}")
+                        manageStorageLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        manageStorageLauncher.launch(intent)
+                    }
+                }
+            }
+            // Android 10 - Use READ_EXTERNAL_STORAGE
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    galleryLauncher.launch("image/*")
+                } else {
+                    legacyPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+            }
+            // Android 9 and below - Use READ_EXTERNAL_STORAGE
+            else -> {
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    galleryLauncher.launch("image/*")
+                } else {
+                    legacyPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+            }
+        }
+    }
+
+    // Load user data
     LaunchedEffect(userId) {
         if (userId.isBlank()) {
             navController.navigate("signin")
@@ -69,6 +152,7 @@ fun ProfileScreen(navController: NavController) {
                 profilePicUrl = snapshot.child("profilePic").getValue(String::class.java) ?: ""
                 loading = false
             }
+
             override fun onCancelled(error: DatabaseError) {
                 loading = false
             }
@@ -91,7 +175,6 @@ fun ProfileScreen(navController: NavController) {
                     modifier = Modifier.padding(16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // The profile picture is clickable.
                     if (profilePicUrl.isNotEmpty()) {
                         AsyncImage(
                             model = profilePicUrl,
@@ -99,16 +182,15 @@ fun ProfileScreen(navController: NavController) {
                             modifier = Modifier
                                 .size(100.dp)
                                 .clip(CircleShape)
-                                .clickable { galleryLauncher.launch("image/*") }
+                                .clickable { handleImageSelection() }
                         )
                     } else {
-                        // Placeholder: show first letter of the user's name.
                         Box(
                             modifier = Modifier
                                 .size(100.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                                .clickable { galleryLauncher.launch("image/*") },
+                                .clickable { handleImageSelection() },
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -124,7 +206,6 @@ fun ProfileScreen(navController: NavController) {
                     Text("Email: $email", style = MaterialTheme.typography.bodyLarge)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Role: $role", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -132,14 +213,9 @@ fun ProfileScreen(navController: NavController) {
 }
 
 /**
- * Uploads a new profile image to Firebase Storage and updates the user's profilePic in Realtime Database.
- *
- * @param uri The URI of the selected image.
- * @param userId The user's ID.
- * @param onSuccess Callback with the download URL.
+ * Uploads profile image to Firebase Storage
  */
 fun uploadProfileImage(uri: Uri, userId: String, onSuccess: (String) -> Unit) {
-    // Create a unique filename.
     val filename = "${System.currentTimeMillis()}.jpg"
     val storage = FirebaseStorage.getInstance("gs://mobile-sec-b6625.firebasestorage.app")
     val storageRef = storage.reference.child("profile/$filename")
@@ -148,19 +224,18 @@ fun uploadProfileImage(uri: Uri, userId: String, onSuccess: (String) -> Unit) {
         .addOnSuccessListener {
             storageRef.downloadUrl.addOnSuccessListener { downloadUri ->
                 val downloadUrl = downloadUri.toString()
-                // Now update the user's profilePic field in the Realtime Database.
-                val userRef = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
+                FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
                     .getReference("users").child(userId)
-                userRef.updateChildren(mapOf("profilePic" to downloadUrl))
+                    .updateChildren(mapOf("profilePic" to downloadUrl))
                     .addOnSuccessListener { onSuccess(downloadUrl) }
-                    .addOnFailureListener { exception ->
-                        Log.e("Profile", "Failed to update profilePic: ${exception.message}")
+                    .addOnFailureListener { e ->
+                        Log.e("Profile", "Update failed: ${e.message}")
                     }
-            }.addOnFailureListener { exception ->
-                Log.e("Profile", "Failed to get download URL: ${exception.message}")
+            }.addOnFailureListener { e ->
+                Log.e("Profile", "Download URL failed: ${e.message}")
             }
         }
-        .addOnFailureListener { exception ->
-            Log.e("Profile", "Image upload failed: ${exception.message}")
+        .addOnFailureListener { e ->
+            Log.e("Profile", "Upload failed: ${e.message}")
         }
 }
