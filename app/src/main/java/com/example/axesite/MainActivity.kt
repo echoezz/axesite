@@ -5,8 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.navigation.compose.rememberNavController
 import com.google.firebase.FirebaseApp
-import com.google.firebase.ktx.Firebase
-import com.google.firebase.storage.ktx.storage
 import com.example.axesite.navigation.AuthNavGraph
 import com.example.axesite.navigation.BottomNavBarApp
 
@@ -15,6 +13,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // Initialize Firebase here
         FirebaseApp.initializeApp(this)
+
         setContent {
             val navController = rememberNavController()
             AuthNavGraph(navController)
