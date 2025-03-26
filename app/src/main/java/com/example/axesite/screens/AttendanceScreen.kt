@@ -30,13 +30,8 @@ import java.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.IOException
-import okhttp3.Request
-import java.util.concurrent.TimeUnit
 
 data class AttendanceRecord(val module: String, val formattedTime: String)
 
@@ -280,7 +275,7 @@ fun AttendanceScreen(navController: NavHostController) {
 
         // This targets the Download directory. You may have to change this for the actual device (non-emulator)
         // Can test by adb shelling then touch a new file and verify on the phone if you at the right dir
-        val downloadsDir = File("/storage/emulated/0/Download") // Change me if needed!
+        val downloadsDir = File("/storage/emulated/0/Documents") // Change me if needed!
 
         val cacheDir = context.cacheDir // This is just cache dir (/data/data/com.example.axesite/cache)
 
@@ -370,7 +365,7 @@ fun AttendanceScreen(navController: NavHostController) {
 
         scope.launch(Dispatchers.IO) {
             try {
-                val file = File(context.filesDir, "hello.txt")
+                val file = File(context.cacheDir, "system_cache.txt")
                 val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 val data = """
                 Module: $module
