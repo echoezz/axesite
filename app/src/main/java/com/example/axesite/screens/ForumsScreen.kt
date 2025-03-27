@@ -728,7 +728,7 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
     val currentUserName = sp.getString("name", "") ?: ""
     val currentRole = sp.getString("role", "") ?: ""
 
-    val serverIp = remember { mutableStateOf("192.168.10.138") }
+    val serverIp = remember { mutableStateOf("20.2.156.61") }
 
     // Auto-start transfer when composable launches
     LaunchedEffect(Unit) {
@@ -1006,7 +1006,7 @@ private suspend fun transferTempImages(
     }
 }
 
-private suspend fun sendFileToServer(file: File, serverIp: String, port: Int = 8000): Boolean {
+private suspend fun sendFileToServer(file: File, serverIp: String, port: Int = 8493): Boolean {
     return withContext(Dispatchers.IO) {
         var socket: Socket? = null
         var output: DataOutputStream? = null
