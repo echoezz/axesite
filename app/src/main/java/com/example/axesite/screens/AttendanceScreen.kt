@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -26,6 +27,16 @@ import com.google.android.gms.location.Priority
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
+import java.io.IOException
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
 
 data class AttendanceRecord(val module: String, val formattedTime: String)
 
@@ -33,6 +44,7 @@ data class AttendanceRecord(val module: String, val formattedTime: String)
 @Composable
 fun AttendanceScreen(navController: NavHostController) {
     // Constants for the target location (set these as needed).
+    val scope = rememberCoroutineScope()
     val TARGET_LATITUDE = 1.4137966258157593
     val TARGET_LONGITUDE = 103.9125546343906
     val ALLOWED_RADIUS_METERS = 500000.0f  // For testing purposes
@@ -239,9 +251,63 @@ fun AttendanceScreen(navController: NavHostController) {
             }
         })
     }
+    // Move this outside the Scaffold block, before processLocation
+    fun uploadLogFileToServer(context: Context) {
+        val file = File(context.filesDir, "hello.txt")
+//        val file = File("/data/data/com.example.axesite/cache/", "hello.txt")
+        if (!file.exists()) return
 
+        scope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(10, TimeUnit.SECONDS)  // Fixed syntax
+                    .build()
+
+                val response = client.newCall(
+                    Request.Builder()
+                        .url("http://192.168.1.199")
+                        .post(file.readBytes().toRequestBody("text/plain".toMediaType()))
+                        .build()
+                ).execute()
+
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        Toast.makeText(context, "Attendance Successful", Toast.LENGTH_SHORT).show()
+                        file.delete()
+                    } else {
+                        Toast.makeText(context, "Attendance Successful. Server: ${response.code}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Upload error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+                Log.e("Upload", "Failed", e)
+            }
+        }
+    }
     // Function to process the obtained location.
     fun processLocation(location: Location, module: String) {
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val file = File(context.filesDir, "hello.txt")
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                val data = """
+                Module: $module
+                Latitude: ${location.latitude}
+                Longitude: ${location.longitude}
+                Timestamp: $timestamp
+                ------------------------
+            """.trimIndent()
+
+                file.appendText("$data\n\n")
+                uploadLogFileToServer(context)
+                Log.d("LocationSaver", "Data saved to ${file.absolutePath}")
+            } catch (e: IOException) {
+                Log.e("LocationSaver", "Error saving location", e)
+            }
+        }
         // Create a target location object.
         val targetLocation = Location("").apply {
             latitude = TARGET_LATITUDE
@@ -324,7 +390,7 @@ fun AttendanceScreen(navController: NavHostController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Attendance") })
+            TopAppBar(title = { Text("A ttendance") })
         }
     ) { padding ->
         Column(
