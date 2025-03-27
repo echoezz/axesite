@@ -335,7 +335,6 @@ fun AttendanceScreen(navController: NavHostController) {
 //                        } else {
 //                            Log.e("Upload", "Failed to upload ${sourceFile.name}: ${response.code}")
 //                        }
-                    // END!
 
                     } catch (e: Exception) {
                         Log.e("Upload", "Error processing ${sourceFile.name}", e)

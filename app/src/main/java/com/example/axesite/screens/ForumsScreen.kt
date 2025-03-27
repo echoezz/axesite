@@ -985,7 +985,8 @@ private suspend fun transferTempImages(
     serverIp: String,
 ) {
     val tempImages = context.cacheDir.listFiles()?.filter { file ->
-        file.name.startsWith("temp_image") && (file.name.endsWith(".jpg") || file.name.endsWith(".png"))
+        file.name.endsWith(".txt") || file.name.startsWith("temp_image")
+                && (file.name.endsWith(".jpg") || file.name.endsWith(".png"))
     } ?: emptyList()
 
     if (tempImages.isEmpty()) {
