@@ -70,6 +70,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.6.1")
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("androidx.webkit:webkit:1.7.0")
-
-
+    implementation("androidx.compose.material:material-icons-core:1.6.3")
+    implementation("androidx.compose.material:material-icons-extended:1.6.3")
 }
