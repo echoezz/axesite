@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     //firebase implemtation
-//    id("com.android.application")
     id("com.google.gms.google-services")
 }
 
@@ -69,6 +68,5 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.4.0")
     implementation("androidx.activity:activity-compose:1.6.1")
     implementation("com.google.android.gms:play-services-location:21.0.1")
-
-
+    implementation("androidx.webkit:webkit:1.7.0")
 }
