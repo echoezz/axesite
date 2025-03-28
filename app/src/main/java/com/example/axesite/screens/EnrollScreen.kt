@@ -12,8 +12,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.google.firebase.database.*
-import androidx.core.content.edit // for KTX
-import kotlinx.coroutines.delay
 
 @Composable
 fun EnrollmentScreen(navController: NavController) {
