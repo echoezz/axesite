@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     //firebase implemtation
+//    id("com.android.application")
     id("com.google.gms.google-services")
 }
 
@@ -54,8 +55,6 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.navigation.compose)
     implementation("com.google.firebase:firebase-database-ktx:21.0.0")
-    implementation(libs.androidx.games.text.input)
-    implementation(libs.androidx.media3.common.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -71,4 +70,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.6.1")
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("androidx.webkit:webkit:1.7.0")
+    implementation("androidx.compose.material:material-icons-core:1.6.3")
+    implementation("androidx.compose.material:material-icons-extended:1.6.3")
 }
