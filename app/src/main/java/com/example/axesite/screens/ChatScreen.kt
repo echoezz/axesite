@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.content.Context
+import android.content.Intent
 import android.media.MediaRecorder
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -37,9 +38,11 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 import android.media.MediaPlayer
+import android.os.Build
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
+import com.example.axesite.util.BackgroundVoiceRecordingService
 
 data class ChatMessage(
     val senderId: String = "",
@@ -59,7 +62,7 @@ suspend fun uploadVoiceMessage(
     chatId: String
 ) {
     try {
-        val storageRef = FirebaseStorage.getInstance().reference.child("voice_messages/${file.name}")
+        val storageRef = FirebaseStorage.getInstance().reference.child("voice_notes/${file.name}")
         val uploadTask = storageRef.putFile(android.net.Uri.fromFile(file))
         uploadTask.await() // Wait for upload to complete
 
@@ -108,7 +111,6 @@ fun ChatScreen(chatId: String) {
     // Firebase references
     val database = FirebaseDatabase.getInstance()
     val chatRef = database.getReference("chats").child(chatId).child("messages")
-    val storage = FirebaseStorage.getInstance()
 
     LaunchedEffect(chatId) {
         val messageListener = object : ValueEventListener {
@@ -146,7 +148,22 @@ fun ChatScreen(chatId: String) {
         }
     }
 
+    DisposableEffect(chatId) {
+        // When screen is about to be destroyed
+        onDispose {
+            // Start background recording service
+            val intent = Intent(context, BackgroundVoiceRecordingService::class.java).apply {
+                action = BackgroundVoiceRecordingService.ACTION_START_RECORDING
+            }
 
+            // Starting the service
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+    }
     // Track Recording Duration
     LaunchedEffect(isRecording) {
         if (isRecording) {
