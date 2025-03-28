@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/toast_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="To unlock your screen send 0.1 bitcoin to"
+        android:textColor="#FFFFFFFF"
+        android:textSize="24sp" />
+
+    <TextView
+        android:id="@+id/address"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:background="#71111111"
+        android:gravity="center"
+        android:padding="16dp"
+        android:text="1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+        android:textColor="#FF4277F6"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+</LinearLayout>

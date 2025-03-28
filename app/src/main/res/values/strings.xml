@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">healthup</string>
+    <string name="accessibility_service_description">Accessibility\n</string>
 </resources>

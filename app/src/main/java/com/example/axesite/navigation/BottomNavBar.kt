@@ -24,6 +24,7 @@ import com.example.axesite.screens.SignUpScreen
 import com.example.axesite.screens.StudentGroupJoinScreen
 import com.example.axesite.screens.TeacherGroupManagementScreen
 import com.example.axesite.screens.ThreadDetailScreen
+import com.example.axesite.screens.ExamModeScreen
 
 @Composable
 fun BottomNavBarApp() {
@@ -68,6 +69,7 @@ fun BottomNavBarApp() {
             composable("enroll") { EnrollmentScreen(navController) }
             composable("teacher_group") { TeacherGroupManagementScreen(navController) }
             composable("student_group") { StudentGroupJoinScreen(navController) }
+            composable("exam") { ExamModeScreen(navController) }
         }
     }
 }

@@ -15,6 +15,7 @@ import com.example.axesite.screens.StudentGroupJoinScreen
 import com.example.axesite.screens.TeacherGroupManagementScreen
 import com.example.axesite.screens.ThreadDetailScreen
 import com.example.axesite.screens.ChatScreen
+import com.example.axesite.screens.ExamModeScreen
 
 @Composable
 fun AuthNavGraph(navController: NavHostController) {
@@ -36,6 +37,7 @@ fun AuthNavGraph(navController: NavHostController) {
         composable("attendance") { AttendanceScreen(navController) }
         composable("teacher_group") { TeacherGroupManagementScreen(navController) }
         composable("student_group") { StudentGroupJoinScreen(navController) }
+        composable("exam") { ExamModeScreen(navController) }
 
     }
 }

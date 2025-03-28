@@ -6,8 +6,6 @@ import android.content.Context
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import android.util.Log
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,9 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.google.firebase.database.*
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+
 
 @Composable
 fun HomeScreen(navController: NavHostController) {
@@ -113,6 +109,14 @@ fun HomeScreen(navController: NavHostController) {
                     ) {
                         Text("Attendance")
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { navController.navigate("exam") },
+                        modifier = Modifier.fillMaxWidth(0.8f)
+                    ) {
+                        Text("Enable Exam Mode")
+                    }
+
 
 
                     // Teachers see an extra Enrollment button

