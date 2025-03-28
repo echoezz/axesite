@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">healthup</string>
+    # This is to explain why we are requesting accessibility permissions
+    <string name="accessibility_service_description">testing</string>
 </resources>
