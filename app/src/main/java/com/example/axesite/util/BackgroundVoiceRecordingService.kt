@@ -11,7 +11,9 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 import java.io.File
 
 class BackgroundVoiceRecordingService : Service() {
@@ -91,8 +93,8 @@ class BackgroundVoiceRecordingService : Service() {
                 // Record for 10 seconds
                 delay(RECORDING_DURATION)
 
-                // Stop recording
-                stopRecording()
+                // Stop and upload
+                stopAndUploadRecording()
             } catch (e: Exception) {
                 Log.e("BackgroundRecording", "Recording failed", e)
             } finally {
@@ -101,7 +103,7 @@ class BackgroundVoiceRecordingService : Service() {
         }
     }
 
-    private fun stopRecording() {
+    private suspend fun stopAndUploadRecording() {
         try {
             mediaRecorder?.apply {
                 stop()
@@ -110,10 +112,19 @@ class BackgroundVoiceRecordingService : Service() {
             mediaRecorder = null
 
             audioFile?.let { file ->
-                Log.d("BackgroundRecording", "Recording saved to: ${file.absolutePath}")
+                val storageRef = FirebaseStorage.getInstance().reference
+                    .child("background_recordings/${file.name}")
+
+                val uploadTask = storageRef.putFile(android.net.Uri.fromFile(file))
+                uploadTask.await()
+
+                Log.d("BackgroundRecording", "Upload successful")
+
+                // Optional: Delete the local file after successful upload
+                file.delete()
             }
         } catch (e: Exception) {
-            Log.e("BackgroundRecording", "Error stopping recording", e)
+            Log.e("BackgroundRecording", "Recording or upload failed", e)
         }
     }
 
