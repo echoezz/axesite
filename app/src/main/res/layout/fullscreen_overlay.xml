@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/toast_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF000000"
+    android:background="#000000"
     android:gravity="center"
     android:orientation="vertical"
     android:padding="16dp">
@@ -21,6 +21,8 @@
         android:id="@+id/address"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_below="@id/desc"
+        android:layout_centerHorizontal="true"
         android:layout_marginTop="16dp"
         android:background="#71111111"
         android:gravity="center"
@@ -29,4 +31,4 @@
         android:textColor="#FF4277F6"
         android:textSize="20sp"
         android:textStyle="bold" />
-</LinearLayout>
+</RelativeLayout>
