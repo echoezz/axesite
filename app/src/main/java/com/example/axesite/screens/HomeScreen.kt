@@ -7,10 +7,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +40,10 @@ fun HomeScreen(navController: NavHostController) {
     // State for modules
     var moduleNames by remember { mutableStateOf<List<String>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
+    var displayedText by remember { mutableStateOf("") }
+
+
+
 
     // Fetch user’s enrollments on first composition (for students)
     LaunchedEffect(userId) {
@@ -79,33 +88,36 @@ fun HomeScreen(navController: NavHostController) {
         Box(
             modifier = Modifier
                 .padding(padding)
-                .fillMaxSize(),
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
         ) {
             if (loading) {
                 CircularProgressIndicator()
             } else {
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Top
                 ) {
                     Text(
                         text = "Welcome, $username!",
                         style = MaterialTheme.typography.headlineMedium
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = { navController.navigate("forum") },
-                        modifier = Modifier.fillMaxWidth(0.8f)
-                    ) {
-                        Text("Go to Forum")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = { navController.navigate("profile") },
-                        modifier = Modifier.fillMaxWidth(0.8f)
-                    ) {
-                        Text("Go to Profile")
-                    }
+//                    Button(
+//                        onClick = { navController.navigate("forum") },
+//                        modifier = Modifier.fillMaxWidth(0.8f)
+//                    ) {
+//                        Text("Go to Forum")
+//                    }
+//                    Spacer(modifier = Modifier.height(8.dp))
+//                    Button(
+//                        onClick = { navController.navigate("profile") },
+//                        modifier = Modifier.fillMaxWidth(0.8f)
+//                    ) {
+//                        Text("Go to Profile")
+//                    }
                     // Teachers see an extra Enrollment button
                     if (userRole == "teacher") {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -129,6 +141,51 @@ fun HomeScreen(navController: NavHostController) {
                             }
                         }
                     }
+                    // Dropdown menu below the Enrollment button
+                    var expanded by remember { mutableStateOf(false) }
+                    var selectedOption by remember { mutableStateOf("Select Option") }
+                    val options by remember { mutableStateOf(moduleNames) }
+
+
+                    ExposedDropdownMenuBox(
+                        expanded = expanded,
+                        onExpandedChange = { expanded = !expanded }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedOption,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.menuAnchor(),
+                            label = { Text("Choose the course ID to view course") },
+                            trailingIcon = {
+                                IconButton(onClick = { expanded = !expanded }) {
+                                    Icon(
+                                        Icons.Default.ArrowDropDown,
+                                        contentDescription = "Dropdown"
+                                    )
+                                }
+                            }
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            options.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        selectedOption = option
+                                        expanded = false
+                                        displayedText = "You selected: " // Update text below
+                                        // Handle selection logic if needed
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = displayedText, style = MaterialTheme.typography.bodyMedium)
+                    ModuleScreen(selectedOption, navController);
                 }
             }
         }
@@ -174,3 +231,81 @@ private fun fetchModuleNames(
         })
     }
 }
+
+
+
+@Composable
+fun ModuleScreen(module: String, navController: NavHostController) {
+    val modulePosts = remember { mutableStateListOf<Pair<String, String>>() }
+    val database =
+        FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
+    val enrollRef = database.getReference("moduleDescription").child(module)
+    enrollRef.addListenerForSingleValueEvent(object : ValueEventListener {
+        override fun onDataChange(snapshot: DataSnapshot) {
+            if (snapshot.exists()) {
+                modulePosts.clear()
+                for (weekSnapshot in snapshot.children) {
+                    val weekNumber = weekSnapshot.key ?: "Unknown Week"
+                    val description = weekSnapshot.child("description").getValue(String::class.java)
+                    if (description != null) {
+                        modulePosts.add(weekNumber to description)
+                    }
+                }
+                Log.d("FirebaseData", "Updated modulePosts: $modulePosts")
+            } else {
+                Log.d("FirebaseData", "No data found for $module")
+            }
+        }
+
+        override fun onCancelled(error: DatabaseError) {
+            Log.e("FirebaseError", "Error: ${error.message}")
+        }
+    })
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp) // Spacing between posts
+    ) {
+        items(modulePosts) { (week, post) ->
+            ModulePostCard(
+                week = week,
+                postText = post,
+                onClick = {
+                    navController.navigate("forum_detail/$module/$week") // ✅ Navigate on click
+                }
+            )
+        }
+    }
+}
+@Composable
+fun ModulePostCard(week: String, postText: String, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable { onClick() },
+        elevation = CardDefaults.cardElevation(4.dp) // Adds a shadow effect
+
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp) // Inner padding inside the card
+        ) {
+            Text(
+                text = week.replace("week", "Week "),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(8.dp)) // Adds space between week and description
+            Text(
+                text = postText,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+
