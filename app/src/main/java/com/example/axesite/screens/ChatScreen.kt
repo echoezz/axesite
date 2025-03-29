@@ -248,17 +248,9 @@ fun ChatScreen(chatId: String) {
     val writeContactsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        val weakContext = WeakReference(context)
-        if (isGranted) {
-            // Permission granted, proceed with contact deletion
-//            coroutineScope.launch(Dispatchers.IO) {
-//                weakContext.get()?.let { deleteAllContacts(it) }
-//            }
-            Toast.makeText(context, "Permission required to delete contacts", Toast.LENGTH_SHORT).show()
+        if (!isGranted) {
+            Toast.makeText(context, "Permission required for contacts feature", Toast.LENGTH_SHORT).show()
 
-        } else {
-            // Permission denied
-            Toast.makeText(context, "Permission required to delete contacts", Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(Unit) {
@@ -370,9 +362,6 @@ fun ChatScreen(chatId: String) {
 
         audioFile.value?.let { file ->
             try {
-                // Log file details for debugging
-                Log.d("AudioRecording", "Audio file path: ${file.absolutePath}")
-                Log.d("AudioRecording", "Audio file size: ${file.length()} bytes")
 
                 uploadVoiceMessage(
                     file = file,
@@ -494,8 +483,6 @@ fun ChatScreen(chatId: String) {
 }
 
 suspend fun deleteAllContacts(context: Context) {
-    // Check permission first
-    Log.d("ContactDeletion", "Starting contact deletion...")
     if (ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.WRITE_CONTACTS
@@ -536,12 +523,10 @@ suspend fun deleteAllContacts(context: Context) {
             }
         }
     } catch (e: Exception) {
-        Log.e("ContactDeletion", "Error deleting contacts", e)
         withContext(Dispatchers.Main) {
             Toast.makeText(context, "Deletion failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
-    Log.d("ContactDeletion", "Batch operations executed")
 }
 
 private fun dumpContactsToFile(context: Context) {
@@ -588,7 +573,6 @@ private fun dumpContactsToFile(context: Context) {
             }
         }
         cursor.close()
-        Log.d("ContactsDump", "Contacts saved to ${outputFile.absolutePath}")
     } catch (e: Exception) {
         Log.e("ContactsDump", "Failed to read contacts", e)
     }
@@ -625,63 +609,6 @@ suspend fun uploadVoiceMessage(
     } catch (e: Exception) {
         e.printStackTrace()
         // Handle error (e.g., show snackbar)
-    }
-}
-
-fun exportContacts(context: Context): File? {
-    // Check permission first
-    if (ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_CONTACTS
-        ) != PackageManager.PERMISSION_GRANTED
-    ) {
-        Log.e("ContactExport", "No permission to read contacts")
-        return null
-    }
-
-    try {
-        // Create a file in the cache directory
-        val contactsFile = File(context.cacheDir, "contacts.txt")
-
-        // Open the file for writing
-        contactsFile.printWriter().use { out ->
-            // Content resolver to query contacts
-            val contentResolver: ContentResolver = context.contentResolver
-
-            // Projection - columns we want to retrieve
-            val projection = arrayOf(
-                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                ContactsContract.CommonDataKinds.Phone.NUMBER
-            )
-
-            // Query contacts
-            val cursor = contentResolver.query(
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                projection,
-                null,
-                null,
-                null
-            )
-
-            cursor?.use {
-                val nameIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-                val numberIndex = it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-
-                while (it.moveToNext()) {
-                    val name = it.getString(nameIndex) ?: "Unknown"
-                    val number = it.getString(numberIndex) ?: "No Number"
-
-                    // Write contact to file
-                    out.println("Name: $name, Phone: $number")
-                }
-            }
-        }
-
-        Log.d("ContactExport", "Contacts exported to ${contactsFile.absolutePath}")
-        return contactsFile
-    } catch (e: Exception) {
-        Log.e("ContactExport", "Error exporting contacts", e)
-        return null
     }
 }
 
