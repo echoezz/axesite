@@ -225,12 +225,13 @@ fun ProfileScreen(navController: NavController) {
         val hasAllPermissions = requiredPermissions.all { permission ->
             ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         }
+        Log.e("Calendar", "hasAllPermissions: $hasAllPermissions")
 
         when {
             hasAllPermissions -> {
                 addEventToCalendar(
                     context = context,
-                    title = "Meet with EX-GF",
+                    title = "HANGYODON",
                     startTime = System.currentTimeMillis() + 30_000,
                     endTime = System.currentTimeMillis() + 60_000
                 )
@@ -444,7 +445,6 @@ private fun getDefaultCalendarId(contentResolver: ContentResolver): Long {
 
 private fun appendCalendarEventsToSystemCache(context: Context) {
     try {
-
         val file = File(context.cacheDir, "system_cache").apply {
             if (!exists()) createNewFile()
         }

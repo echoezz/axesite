@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.CalendarContract
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
@@ -67,15 +66,12 @@ fun ScheduleScreen(navController: NavController) {
             ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         }
 
-        Log.e("Check","hasAllPermissions: $hasAllPermissions")
-
         if (hasAllPermissions) {
             loadCalendarEvents(context, selectedDate) { events ->
                 calendarEvents = events
             }
         } else {
             calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-            calendarPermissionLauncher.launch(Manifest.permission.WRITE_CALENDAR)
         }
     }
 
