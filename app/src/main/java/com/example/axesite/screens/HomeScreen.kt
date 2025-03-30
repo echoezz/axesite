@@ -176,8 +176,7 @@ fun HomeScreen(navController: NavHostController) {
                                     onClick = {
                                         selectedOption = option
                                         expanded = false
-                                        displayedText = "You selected: " // Update text below
-                                        // Handle selection logic if needed
+                                        displayedText = "You selected: "
                                     }
                                 )
                             }
@@ -212,7 +211,6 @@ private fun fetchModuleNames(
     moduleIds.forEach { moduleId ->
         modulesRef.child(moduleId).addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                // Assuming the module node contains a field "moduleName"
                 val moduleName =
                     snapshot.child("moduleName").getValue(String::class.java) ?: moduleId
                 moduleNames.add(moduleName)
@@ -266,14 +264,20 @@ fun ModuleScreen(module: String, navController: NavHostController) {
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp) // Spacing between posts
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(modulePosts) { (week, post) ->
             ModulePostCard(
                 week = week,
                 postText = post,
                 onClick = {
-                    navController.navigate("forum_detail/$module/$week") // ✅ Navigate on click
+                    Log.d("NAV_DEBUG", "Attempting to navigate to: module_detail/$module/$week")
+                    try {
+                        navController.navigate("module_detail/$module/$week")
+                    } catch (e: Exception) {
+                        Log.e("NAV_ERROR", "Navigation failed", e)
+                        e.printStackTrace()
+                    }
                 }
             )
         }
@@ -286,19 +290,19 @@ fun ModulePostCard(week: String, postText: String, onClick: () -> Unit) {
             .fillMaxWidth()
             .padding(8.dp)
             .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(4.dp) // Adds a shadow effect
+        elevation = CardDefaults.cardElevation(4.dp)
 
     ) {
         Column(
             modifier = Modifier
-                .padding(16.dp) // Inner padding inside the card
+                .padding(16.dp)
         ) {
             Text(
                 text = week.replace("week", "Week "),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(8.dp)) // Adds space between week and description
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = postText,
                 style = MaterialTheme.typography.bodyMedium,
