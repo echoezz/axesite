@@ -13,10 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import android.net.Uri
-import android.view.KeyEvent
-import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
 import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
 import androidx.compose.ui.text.font.FontWeight
