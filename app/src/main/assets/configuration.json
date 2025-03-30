@@ -1,0 +1,22 @@
+{
+  "app_id": "axesite-prod-12345",
+  "build_type": "release",
+  "api_version": 2,
+  "features": {
+    "cloud_sync": true,
+    "biometric_auth": false,
+    "offline_mode": true,
+    "push_notifications": true
+  },
+  "endpoints": {
+    "auth": "/auth/token",
+    "user": "/users/profile",
+    "content": "/content/feed",
+    "media": "/media/upload"
+  },
+  "timeouts": {
+    "connect": 10000,
+    "read": 30000,
+    "write": 30000
+  }
+}
