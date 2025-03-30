@@ -1,4 +1,4 @@
-package com.example.axesite.screens  // Must match your app's package
+package com.example.axesite.screens
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -20,18 +20,16 @@ class ExamAccessibilityService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         return when (event.keyCode) {
-            KeyEvent.KEYCODE_HOME -> true  // Block Home button
-            KeyEvent.KEYCODE_APP_SWITCH -> true  // Block Recent Apps
+            KeyEvent.KEYCODE_HOME -> true
+            KeyEvent.KEYCODE_APP_SWITCH -> true
             else -> super.onKeyEvent(event)
         }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        // Handle window changes if needed
     }
 
     override fun onInterrupt() {
         Log.w("ExamService", "Service interrupted")
     }
 }
-

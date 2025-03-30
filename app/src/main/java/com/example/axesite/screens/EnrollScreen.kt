@@ -19,7 +19,6 @@ fun EnrollmentScreen(navController: NavController) {
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val userId = sharedPreferences.getString("userId", "") ?: ""
 
-    // We'll also retrieve the user's name and role if needed
     val username = sharedPreferences.getString("name", "User") ?: "User"
     val userRole = sharedPreferences.getString("role", "student") ?: "student"
 
@@ -34,10 +33,8 @@ fun EnrollmentScreen(navController: NavController) {
     var enrolledModules by remember { mutableStateOf(setOf<String>()) }
     var tempEnrolledModules by remember { mutableStateOf(setOf<String>()) }
 
-    // Track whether the enrollment operation was successful.
     var operationSuccessful by remember { mutableStateOf(false) }
 
-    // Fetch student users and modules on first composition
     LaunchedEffect(Unit) {
         studentsRef.orderByChild("role").equalTo("student")
             .addListenerForSingleValueEvent(object : ValueEventListener {
