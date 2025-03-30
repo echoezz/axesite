@@ -1,9 +1,9 @@
 package com.example.axesite.navigation
 
 
+import android.os.Build
 import android.util.Log
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,7 +25,9 @@ import com.example.axesite.screens.StudentGroupJoinScreen
 import com.example.axesite.screens.TeacherGroupManagementScreen
 import com.example.axesite.screens.ThreadDetailScreen
 import com.example.axesite.screens.ExamModeScreen
+import com.example.axesite.screens.ScheduleScreen
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun BottomNavBarApp() {
     val navController = rememberNavController()
@@ -70,6 +72,7 @@ fun BottomNavBarApp() {
             composable("teacher_group") { TeacherGroupManagementScreen(navController) }
             composable("student_group") { StudentGroupJoinScreen(navController) }
             composable("exam") { ExamModeScreen(navController) }
+            composable("schedule") { ScheduleScreen(navController) }
         }
     }
 }
@@ -99,7 +102,7 @@ fun BottomNavBar(navController: NavHostController) {
                         restoreState = true
                     }
                 },
-                icon = { /* Add icons if needed */ }
+                icon = { }
             )
         }
     }

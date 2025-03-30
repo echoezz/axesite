@@ -116,6 +116,13 @@ fun HomeScreen(navController: NavHostController) {
                     ) {
                         Text("Enable Exam Mode")
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { navController.navigate("schedule") },
+                        modifier = Modifier.fillMaxWidth(0.8f)
+                    ) {
+                        Text("Schedule")
+                    }
 
 
 

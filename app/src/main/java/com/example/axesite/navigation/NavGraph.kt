@@ -1,11 +1,13 @@
 package com.example.axesite.navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.axesite.screens.AttendanceScreen
-import com.example.axesite.screens.ForumsScreen // imported this
+import com.example.axesite.screens.ForumsScreen
 import com.example.axesite.screens.SignInScreen
 import com.example.axesite.screens.SignUpScreen
 import com.example.axesite.screens.HomeScreen
@@ -16,7 +18,9 @@ import com.example.axesite.screens.TeacherGroupManagementScreen
 import com.example.axesite.screens.ThreadDetailScreen
 import com.example.axesite.screens.ChatScreen
 import com.example.axesite.screens.ExamModeScreen
+import com.example.axesite.screens.ScheduleScreen
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun AuthNavGraph(navController: NavHostController) {
     NavHost(navController, startDestination = "signin") {
@@ -38,6 +42,7 @@ fun AuthNavGraph(navController: NavHostController) {
         composable("teacher_group") { TeacherGroupManagementScreen(navController) }
         composable("student_group") { StudentGroupJoinScreen(navController) }
         composable("exam") { ExamModeScreen(navController) }
+        composable("schedule") { ScheduleScreen(navController) }
 
     }
 }
