@@ -63,3 +63,23 @@
 -adaptclassstrings
 -adaptresourcefilenames
 -adaptresourcefilecontents
+
+# Hazel extra proguard + Paranoid String
+# Keep Firebase model classes and their no-arg constructors
+-keepclassmembers class com.example.axesite.screens.ChatMessage {
+    public <init>();
+    public *;
+}
+
+# Keep all classes in screens package that might be used with Firebase
+-keep class com.example.axesite.screens.** { *; }
+
+# Alternative: Keep all data classes (if you have many Firebase models)
+-keepclassmembers class * implements java.io.Serializable {
+    public <init>();
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}

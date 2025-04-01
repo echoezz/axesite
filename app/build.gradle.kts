@@ -31,11 +31,11 @@ android {
                 "proguard-rules.pro",
                 "r8-rules.pro"
             )
-            
+
             // Rename resources to make them harder to find
             resValue("string", "app_name", "AxS")
         }
-        
+
         debug {
             // Enable obfuscation even in debug builds
             isMinifyEnabled = true
@@ -46,7 +46,7 @@ android {
             )
         }
     }
-    
+
     // Create confusing folder structure
     sourceSets {
         getByName("main").java.srcDirs("src/main/java", "src/auxcode/java", "src/xdata/java")
@@ -63,7 +63,7 @@ android {
     buildFeatures {
         compose = true
     }
-    
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
