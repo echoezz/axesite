@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    //firebase implemtation
+//    id("com.android.application")
     id("com.google.gms.google-services")
 }
 
@@ -11,48 +13,23 @@ android {
 
     defaultConfig {
         applicationId = "com.example.axesite"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        vectorDrawables {
-            useSupportLibrary = true
-        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-                "r8-rules.pro"
-            )
-
-            // Rename resources to make them harder to find
-            resValue("string", "app_name", "AxS")
-        }
-
-        debug {
-            // Enable obfuscation even in debug builds
-            isMinifyEnabled = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-                "r8-rules.pro"  // Add the R8 rules
+                "proguard-rules.pro"
             )
         }
     }
-
-    // Create confusing folder structure
-    sourceSets {
-        getByName("main").java.srcDirs("src/main/java", "src/auxcode/java", "src/xdata/java")
-        getByName("main").res.srcDirs("src/main/res", "src/auxcode/res", "src/xdata/res")
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -63,16 +40,9 @@ android {
     buildFeatures {
         compose = true
     }
-
-    packaging {
-        resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
-        }
-    }
 }
 
 dependencies {
-    implementation ("com.google.android.material:material:1.5.0")
     implementation ("androidx.compose.material3:material3:1.2.0")
     implementation ("androidx.navigation:navigation-compose:2.7.7")
     implementation(libs.androidx.core.ktx)
