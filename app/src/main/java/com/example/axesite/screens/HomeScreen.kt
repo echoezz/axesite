@@ -126,6 +126,7 @@ fun HomeScreen(navController: NavHostController) {
 
 
 
+
                     // Teachers see an extra Enrollment button
                     if (userRole == "teacher") {
                         Spacer(modifier = Modifier.height(8.dp))
@@ -135,10 +136,23 @@ fun HomeScreen(navController: NavHostController) {
                         ) {
                             Text("Go to Enrollment")
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { navController.navigate("teacher_group") },
+                            modifier = Modifier.fillMaxWidth(0.8f)
+                        ) {
+                            Text("Group")
+                        }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                     // Only display enrolled modules for students
                     if (userRole != "teacher") {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { navController.navigate("student_group") },
+                            modifier = Modifier.fillMaxWidth(0.8f)
+                        ) {
+                            Text("Group")
+                        }
                         Text("Enrolled Modules:", style = MaterialTheme.typography.titleMedium)
                         Spacer(modifier = Modifier.height(8.dp))
                         if (moduleNames.isEmpty()) {
