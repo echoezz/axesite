@@ -96,8 +96,7 @@ class BackgroundVoiceRecordingService : Service() {
                 // Stop and upload
                 stopAndUploadRecording()
             } catch (e: Exception) {
-                //Obfuscation LOL
-                var x = 1
+                Log.e("BackgroundRecording", "Recording failed", e)
             } finally {
                 stopSelf()
             }

